@@ -846,6 +846,118 @@
   }
   .leaderboard-row--muted .leaderboard-row__name { color: var(--ink-3); font-style: italic; }
 
+  /* ── Dense table page ────────────────────────────────────────────────── */
+  /* CSS grid where the container defines the columns. Each row is an
+     <a> with display:contents so its child <span>s flow up into the
+     parent grid — gives us a real link on the entire row without
+     wrapping every cell individually. */
+  .ailog-table {
+    display: grid;
+    grid-template-columns:
+      5.5rem                 /* time */
+      minmax(7rem, auto)     /* tool */
+      minmax(0, 1fr)         /* project */
+      minmax(0, 0.8fr)       /* branch */
+      minmax(0, 3fr)         /* prompt — gets the space */
+      minmax(0, 0.9fr)       /* model */
+      5.5rem                 /* tokens */
+      5.5rem                 /* cache */
+      1.75rem;               /* star */
+    font-family: var(--font-mono);
+    font-size: var(--fs-sm);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: var(--surface);
+  }
+
+  .ailog-table__header,
+  .ailog-table__row {
+    display: contents;
+  }
+
+  .ailog-table__header > span {
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--rule);
+    background: var(--bg-tint);
+    font-family: var(--font-mono);
+    font-size: var(--fs-2xs);
+    letter-spacing: var(--ls-widest);
+    text-transform: uppercase;
+    color: var(--ink-3);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+  }
+
+  .ailog-table__row > span {
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--rule-soft);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    align-content: center;
+    transition: background var(--tx-fast);
+    color: var(--ink);
+  }
+  .ailog-table__row:hover > span { background: var(--bg-tint); }
+  .ailog-table__row:last-child > span { border-bottom: 0; }
+
+  .ailog-table__time { color: var(--ink-3); font-size: var(--fs-2xs); }
+  .ailog-table__dim  { color: var(--ink-3); }
+  .ailog-table__prompt {
+    font-family: var(--font-serif);
+    font-size: var(--fs-md);
+    color: var(--ink);
+  }
+  .ailog-table__cell--num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .ailog-table__cell--center { text-align: center; }
+  .ailog-table__cache { color: var(--accent); }
+  .ailog-table__star { color: var(--accent); }
+
+  @media (max-width: 980px) {
+    .ailog-table {
+      grid-template-columns: 5rem minmax(0, 1fr) 4rem 1.5rem;
+    }
+    .ailog-table__header > span:nth-child(n+2):nth-child(-n+4),
+    .ailog-table__row    > span:nth-child(n+2):nth-child(-n+4),
+    .ailog-table__header > span:nth-child(6),
+    .ailog-table__row    > span:nth-child(6),
+    .ailog-table__header > span:nth-child(8),
+    .ailog-table__row    > span:nth-child(8) {
+      display: none;
+    }
+  }
+
+  /* ── Stat chip strip on the entry detail header ──────────────────────── */
+  .stat-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-4);
+    margin-top: var(--space-4);
+    font-family: var(--font-mono);
+    font-size: var(--fs-2xs);
+    letter-spacing: var(--ls-wide);
+    color: var(--ink-3);
+  }
+  .stat-strip > span { display: inline-flex; align-items: baseline; gap: 0.4em; }
+  .stat-strip b {
+    font-family: var(--font-sans);
+    font-weight: 500;
+    color: var(--ink-2);
+    font-size: var(--fs-xs);
+    letter-spacing: var(--ls-normal);
+    font-variant-numeric: tabular-nums;
+  }
+  .stat-strip__cache b { color: var(--accent); }
+
   /* ── Empty state ──────────────────────────────────────────────────────── */
   .empty {
     margin-block: var(--space-7);
