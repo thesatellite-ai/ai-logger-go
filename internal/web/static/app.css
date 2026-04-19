@@ -846,7 +846,201 @@
   }
   .leaderboard-row--muted .leaderboard-row__name { color: var(--ink-3); font-style: italic; }
 
-  /* ── Dense table page ────────────────────────────────────────────────── */
+  /* ── Datagrid (/table page) ──────────────────────────────────────────── */
+  /* Real <table> this time — gives us colgroup/col for column-group
+     styling and lets JS toggle column visibility via class on the
+     parent table (.hide-col-X .col-X { display: none }). */
+  .page-head > div { min-width: 0; }
+
+  .table-scroll {
+    width: 100%;
+    overflow-x: auto;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+  }
+  .ailog-table-grid {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-family: var(--font-mono);
+    font-size: var(--fs-sm);
+  }
+  .ailog-table-grid th,
+  .ailog-table-grid td {
+    padding: var(--space-2) var(--space-3);
+    border-bottom: 1px solid var(--rule-soft);
+    white-space: nowrap;
+    max-width: 28rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+  }
+  .ailog-table-grid th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--bg-tint);
+    border-bottom: 1px solid var(--rule);
+    font-size: var(--fs-2xs);
+    letter-spacing: var(--ls-widest);
+    text-transform: uppercase;
+    color: var(--ink-3);
+    font-weight: 500;
+    text-align: left;
+  }
+  .ailog-table-grid thead .sort-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35em;
+    transition: color var(--tx-fast);
+  }
+  .ailog-table-grid thead .sort-link:hover { color: var(--ink); }
+  .sort-indicator { color: var(--accent); font-weight: 700; font-size: var(--fs-xs); }
+
+  /* Filter row */
+  .ailog-table-grid__filters td {
+    padding: var(--space-2) var(--space-2);
+    background: var(--surface-alt);
+    border-bottom: 1px solid var(--rule);
+    position: sticky;
+    top: 2.15rem;
+    z-index: 1;
+  }
+  .filter-input {
+    width: 100%;
+    padding: 0.25rem 0.4rem;
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--ink-2);
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    transition: border-color var(--tx-fast);
+  }
+  .filter-input:focus {
+    border-color: var(--accent);
+    color: var(--ink);
+    outline: none;
+    box-shadow: 0 0 0 2px var(--accent-glow);
+  }
+  .filter-input::placeholder { color: var(--ink-4); font-style: italic; }
+
+  /* Body rows */
+  .ailog-table-grid tbody tr { transition: background var(--tx-fast); cursor: pointer; }
+  .ailog-table-grid tbody tr:hover { background: var(--bg-tint); }
+  .ailog-table-grid tbody tr:last-child td { border-bottom: 0; }
+
+  /* Cell tone helpers */
+  .cell-time    { color: var(--ink-3); font-size: var(--fs-2xs); }
+  .cell-mono    { font-family: var(--font-mono); }
+  .cell-serif   { font-family: var(--font-serif); font-size: var(--fs-md); }
+  .cell-num     { font-variant-numeric: tabular-nums; color: var(--ink-2); }
+  .cell-dim     { color: var(--ink-3); }
+  .cell-accent  { color: var(--accent); }
+  .cell-right   { text-align: right; }
+  .cell-center  { text-align: center; }
+  .ailog-table-grid td.cell-right,
+  .ailog-table-grid th.cell-right { text-align: right; }
+  .ailog-table-grid td.cell-center,
+  .ailog-table-grid th.cell-center { text-align: center; }
+
+  /* Column visibility — JS adds .hide-col-X to the table, CSS does
+     the rest. The col element gets hidden too so colgroup widths
+     collapse cleanly. */
+  .ailog-table-grid col.col-hidden { visibility: collapse; }
+  /* Generated: one pair of rules per column key in TableColumns. We
+     use attribute-selector bracket syntax so adding a column means
+     nothing to do here. */
+  .ailog-table-grid[class*="hide-col-"] {
+    /* no-op selector — just here to document that hide-col-* classes
+       exist on this element; actual hiding is done per-column below.
+       See table.js for how the classes get toggled. */
+  }
+
+  /* ── Column chooser (<details>/<summary> popover) ─────────────────── */
+  .col-chooser {
+    position: relative;
+    user-select: none;
+  }
+  .col-chooser > summary {
+    list-style: none;
+    cursor: pointer;
+  }
+  .col-chooser > summary::-webkit-details-marker { display: none; }
+  .col-chooser__panel {
+    position: absolute;
+    top: calc(100% + var(--space-2));
+    right: 0;
+    z-index: 10;
+    width: min(22rem, 90vw);
+    max-height: 70vh;
+    overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    padding: var(--space-4);
+  }
+  .col-chooser__header {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+    padding-bottom: var(--space-3);
+    border-bottom: 1px solid var(--rule-soft);
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    letter-spacing: var(--ls-wider);
+    text-transform: uppercase;
+    color: var(--ink-2);
+  }
+  .col-chooser__list {
+    display: flex; flex-direction: column; gap: 1px;
+  }
+  .col-chooser__list label {
+    display: grid;
+    grid-template-columns: 1.25rem 1fr auto;
+    gap: var(--space-2);
+    align-items: center;
+    padding: var(--space-2);
+    font-family: var(--font-sans);
+    font-size: var(--fs-sm);
+    color: var(--ink);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: background var(--tx-fast);
+  }
+  .col-chooser__list label:hover { background: var(--bg-tint); }
+  .col-chooser__list input[type="checkbox"] { accent-color: var(--accent); }
+  .col-chooser__key {
+    font-family: var(--font-mono);
+    font-size: var(--fs-2xs);
+    letter-spacing: var(--ls-wide);
+    color: var(--ink-4);
+  }
+  .col-chooser__footer {
+    margin-top: var(--space-3);
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--rule-soft);
+    display: flex; gap: var(--space-2);
+  }
+  .col-chooser__footer button {
+    flex: 1;
+    padding: var(--space-2);
+    font-family: var(--font-mono);
+    font-size: var(--fs-2xs);
+    letter-spacing: var(--ls-wider);
+    text-transform: uppercase;
+    color: var(--ink-2);
+    background: var(--bg-tint);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-sm);
+    transition: all var(--tx-fast);
+  }
+  .col-chooser__footer button:hover { color: var(--ink); border-color: var(--ink-4); }
+
+  /* ── Legacy dense table page (kept for the old CSS grid layout; the
+        datagrid above replaces it) ─────────────────────────────────── */
   /* CSS grid where the container defines the columns. Each row is an
      <a> with display:contents so its child <span>s flow up into the
      parent grid — gives us a real link on the entire row without
@@ -935,6 +1129,115 @@
       display: none;
     }
   }
+
+  /* Per-column hide rules for the datagrid — one pair per column key
+     in internal/web/views/table_columns.go. Keep this list in sync;
+     a forgotten entry means that column can't be hidden. */
+  .ailog-table-grid.hide-col-time col.col-time,
+  .ailog-table-grid.hide-col-time th.col-time,
+  .ailog-table-grid.hide-col-time td.col-time { display: none; }
+  .ailog-table-grid.hide-col-id col.col-id,
+  .ailog-table-grid.hide-col-id th.col-id,
+  .ailog-table-grid.hide-col-id td.col-id { display: none; }
+  .ailog-table-grid.hide-col-tool col.col-tool,
+  .ailog-table-grid.hide-col-tool th.col-tool,
+  .ailog-table-grid.hide-col-tool td.col-tool { display: none; }
+  .ailog-table-grid.hide-col-tool_version col.col-tool_version,
+  .ailog-table-grid.hide-col-tool_version th.col-tool_version,
+  .ailog-table-grid.hide-col-tool_version td.col-tool_version { display: none; }
+  .ailog-table-grid.hide-col-model col.col-model,
+  .ailog-table-grid.hide-col-model th.col-model,
+  .ailog-table-grid.hide-col-model td.col-model { display: none; }
+  .ailog-table-grid.hide-col-project col.col-project,
+  .ailog-table-grid.hide-col-project th.col-project,
+  .ailog-table-grid.hide-col-project td.col-project { display: none; }
+  .ailog-table-grid.hide-col-repo_owner col.col-repo_owner,
+  .ailog-table-grid.hide-col-repo_owner th.col-repo_owner,
+  .ailog-table-grid.hide-col-repo_owner td.col-repo_owner { display: none; }
+  .ailog-table-grid.hide-col-repo_name col.col-repo_name,
+  .ailog-table-grid.hide-col-repo_name th.col-repo_name,
+  .ailog-table-grid.hide-col-repo_name td.col-repo_name { display: none; }
+  .ailog-table-grid.hide-col-repo_remote col.col-repo_remote,
+  .ailog-table-grid.hide-col-repo_remote th.col-repo_remote,
+  .ailog-table-grid.hide-col-repo_remote td.col-repo_remote { display: none; }
+  .ailog-table-grid.hide-col-branch col.col-branch,
+  .ailog-table-grid.hide-col-branch th.col-branch,
+  .ailog-table-grid.hide-col-branch td.col-branch { display: none; }
+  .ailog-table-grid.hide-col-commit col.col-commit,
+  .ailog-table-grid.hide-col-commit th.col-commit,
+  .ailog-table-grid.hide-col-commit td.col-commit { display: none; }
+  .ailog-table-grid.hide-col-cwd col.col-cwd,
+  .ailog-table-grid.hide-col-cwd th.col-cwd,
+  .ailog-table-grid.hide-col-cwd td.col-cwd { display: none; }
+  .ailog-table-grid.hide-col-session_id col.col-session_id,
+  .ailog-table-grid.hide-col-session_id th.col-session_id,
+  .ailog-table-grid.hide-col-session_id td.col-session_id { display: none; }
+  .ailog-table-grid.hide-col-session_name col.col-session_name,
+  .ailog-table-grid.hide-col-session_name th.col-session_name,
+  .ailog-table-grid.hide-col-session_name td.col-session_name { display: none; }
+  .ailog-table-grid.hide-col-turn col.col-turn,
+  .ailog-table-grid.hide-col-turn th.col-turn,
+  .ailog-table-grid.hide-col-turn td.col-turn { display: none; }
+  .ailog-table-grid.hide-col-parent col.col-parent,
+  .ailog-table-grid.hide-col-parent th.col-parent,
+  .ailog-table-grid.hide-col-parent td.col-parent { display: none; }
+  .ailog-table-grid.hide-col-hostname col.col-hostname,
+  .ailog-table-grid.hide-col-hostname th.col-hostname,
+  .ailog-table-grid.hide-col-hostname td.col-hostname { display: none; }
+  .ailog-table-grid.hide-col-user col.col-user,
+  .ailog-table-grid.hide-col-user th.col-user,
+  .ailog-table-grid.hide-col-user td.col-user { display: none; }
+  .ailog-table-grid.hide-col-shell col.col-shell,
+  .ailog-table-grid.hide-col-shell th.col-shell,
+  .ailog-table-grid.hide-col-shell td.col-shell { display: none; }
+  .ailog-table-grid.hide-col-terminal col.col-terminal,
+  .ailog-table-grid.hide-col-terminal th.col-terminal,
+  .ailog-table-grid.hide-col-terminal td.col-terminal { display: none; }
+  .ailog-table-grid.hide-col-terminal_title col.col-terminal_title,
+  .ailog-table-grid.hide-col-terminal_title th.col-terminal_title,
+  .ailog-table-grid.hide-col-terminal_title td.col-terminal_title { display: none; }
+  .ailog-table-grid.hide-col-tty col.col-tty,
+  .ailog-table-grid.hide-col-tty th.col-tty,
+  .ailog-table-grid.hide-col-tty td.col-tty { display: none; }
+  .ailog-table-grid.hide-col-pid col.col-pid,
+  .ailog-table-grid.hide-col-pid th.col-pid,
+  .ailog-table-grid.hide-col-pid td.col-pid { display: none; }
+  .ailog-table-grid.hide-col-prompt col.col-prompt,
+  .ailog-table-grid.hide-col-prompt th.col-prompt,
+  .ailog-table-grid.hide-col-prompt td.col-prompt { display: none; }
+  .ailog-table-grid.hide-col-response col.col-response,
+  .ailog-table-grid.hide-col-response th.col-response,
+  .ailog-table-grid.hide-col-response td.col-response { display: none; }
+  .ailog-table-grid.hide-col-raw col.col-raw,
+  .ailog-table-grid.hide-col-raw th.col-raw,
+  .ailog-table-grid.hide-col-raw td.col-raw { display: none; }
+  .ailog-table-grid.hide-col-tokens_in col.col-tokens_in,
+  .ailog-table-grid.hide-col-tokens_in th.col-tokens_in,
+  .ailog-table-grid.hide-col-tokens_in td.col-tokens_in { display: none; }
+  .ailog-table-grid.hide-col-tokens_out col.col-tokens_out,
+  .ailog-table-grid.hide-col-tokens_out th.col-tokens_out,
+  .ailog-table-grid.hide-col-tokens_out td.col-tokens_out { display: none; }
+  .ailog-table-grid.hide-col-cache_read col.col-cache_read,
+  .ailog-table-grid.hide-col-cache_read th.col-cache_read,
+  .ailog-table-grid.hide-col-cache_read td.col-cache_read { display: none; }
+  .ailog-table-grid.hide-col-cache_create col.col-cache_create,
+  .ailog-table-grid.hide-col-cache_create th.col-cache_create,
+  .ailog-table-grid.hide-col-cache_create td.col-cache_create { display: none; }
+  .ailog-table-grid.hide-col-stop_reason col.col-stop_reason,
+  .ailog-table-grid.hide-col-stop_reason th.col-stop_reason,
+  .ailog-table-grid.hide-col-stop_reason td.col-stop_reason { display: none; }
+  .ailog-table-grid.hide-col-permission_mode col.col-permission_mode,
+  .ailog-table-grid.hide-col-permission_mode th.col-permission_mode,
+  .ailog-table-grid.hide-col-permission_mode td.col-permission_mode { display: none; }
+  .ailog-table-grid.hide-col-tags col.col-tags,
+  .ailog-table-grid.hide-col-tags th.col-tags,
+  .ailog-table-grid.hide-col-tags td.col-tags { display: none; }
+  .ailog-table-grid.hide-col-starred col.col-starred,
+  .ailog-table-grid.hide-col-starred th.col-starred,
+  .ailog-table-grid.hide-col-starred td.col-starred { display: none; }
+  .ailog-table-grid.hide-col-notes col.col-notes,
+  .ailog-table-grid.hide-col-notes th.col-notes,
+  .ailog-table-grid.hide-col-notes td.col-notes { display: none; }
 
   /* ── Stat chip strip on the entry detail header ──────────────────────── */
   .stat-strip {
