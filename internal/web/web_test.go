@@ -250,6 +250,24 @@ func TestProjects_ListsCounts(t *testing.T) {
 	body := getBody(t, srv.URL+"/projects")
 	mustContain(t, body, "github.com/x/one")
 	mustContain(t, body, "github.com/x/two")
+	// (none) bucket should render as text, not a link with q=*
+	if strings.Contains(body, "q=*") {
+		t.Fatal("project links must not use q=* (invalid FTS5 query)")
+	}
+}
+
+func TestSearch_FilterOnlyNoQuery_ReturnsAllInProject(t *testing.T) {
+	srv, s := newTestServer(t)
+	seedEntry(t, s, store.InsertEntryInput{Prompt: "alpha", Project: "github.com/x/one"})
+	seedEntry(t, s, store.InsertEntryInput{Prompt: "beta", Project: "github.com/x/one"})
+	seedEntry(t, s, store.InsertEntryInput{Prompt: "gamma", Project: "github.com/x/other"})
+
+	body := getBody(t, srv.URL+"/search?project=github.com/x/one")
+	mustContain(t, body, "alpha")
+	mustContain(t, body, "beta")
+	if strings.Contains(body, "gamma") {
+		t.Fatal("filter-only search leaked entries from other project")
+	}
 }
 
 func TestStaticFiles_ServeHTMX(t *testing.T) {

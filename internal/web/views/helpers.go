@@ -15,3 +15,11 @@ func pluralES(n int) string {
 	}
 	return "es"
 }
+
+// entrySuffix renders "y" / "ies" for entry / entries.
+func entrySuffix(n int) string {
+	if n == 1 {
+		return "y"
+	}
+	return "ies"
+}
