@@ -48,13 +48,25 @@ func newHookCmd() *cobra.Command {
 	return cmd
 }
 
+// promptCapture carries the prompt-side input from a hook adapter to
+// capturePrompt. Adapters with no extras (codex / opencode / generic)
+// leave the optional fields empty.
+type promptCapture struct {
+	Tool           string // required — "claude-code" / "codex" / …
+	SessionID      string
+	CWD            string
+	Prompt         string
+	Trace          string // free-form provenance; claude-code stores transcript_path
+	PermissionMode string // claude-code only
+}
+
 // capturePrompt is the tool-agnostic primitive behind every prompt-side
 // hook adapter. It chdirs into the payload-supplied cwd (so git
 // auto-detection works), collects the rest of the environment, scrubs
 // secrets out of the prompt, and writes one new entry to the store.
-func capturePrompt(ctx stdcontext.Context, tool, sessionID, cwd, prompt, trace string) error {
-	if cwd != "" {
-		_ = os.Chdir(cwd)
+func capturePrompt(ctx stdcontext.Context, p promptCapture) error {
+	if p.CWD != "" {
+		_ = os.Chdir(p.CWD)
 	}
 	env := aictx.Collect(ctx)
 	s, err := openStore(ctx)
@@ -63,24 +75,25 @@ func capturePrompt(ctx stdcontext.Context, tool, sessionID, cwd, prompt, trace s
 	}
 	defer func() { _ = s.Close() }()
 	_, err = s.InsertEntry(ctx, store.InsertEntryInput{
-		Tool:          tool,
-		CWD:           firstNonEmptyS(cwd, env.CWD),
-		Project:       env.Project,
-		RepoOwner:     env.Git.Owner,
-		RepoName:      env.Git.Name,
-		RepoRemote:    env.Git.Remote,
-		GitBranch:     env.Git.Branch,
-		GitCommit:     env.Git.Commit,
-		SessionID:     sessionID,
-		Hostname:      env.Env.Hostname,
-		User:          env.Env.User,
-		Shell:         env.Env.Shell,
-		Terminal:      env.Env.Terminal,
-		TerminalTitle: env.Env.TerminalTitle,
-		TTY:           env.Env.TTY,
-		PID:           env.Env.PID,
-		Prompt:        redact.Scrub(prompt),
-		Raw:           trace,
+		Tool:           p.Tool,
+		CWD:            firstNonEmptyS(p.CWD, env.CWD),
+		Project:        env.Project,
+		RepoOwner:      env.Git.Owner,
+		RepoName:       env.Git.Name,
+		RepoRemote:     env.Git.Remote,
+		GitBranch:      env.Git.Branch,
+		GitCommit:      env.Git.Commit,
+		SessionID:      p.SessionID,
+		Hostname:       env.Env.Hostname,
+		User:           env.Env.User,
+		Shell:          env.Env.Shell,
+		Terminal:       env.Env.Terminal,
+		TerminalTitle:  env.Env.TerminalTitle,
+		TTY:            env.Env.TTY,
+		PID:            env.Env.PID,
+		Prompt:         redact.Scrub(p.Prompt),
+		Raw:            p.Trace,
+		PermissionMode: p.PermissionMode,
 	})
 	return err
 }
@@ -90,7 +103,11 @@ func capturePrompt(ctx stdcontext.Context, tool, sessionID, cwd, prompt, trace s
 // attaches the response (after scrubbing) to the first one that doesn't
 // already have one. No-op if the session is unknown or all entries are
 // already closed.
-func attachResponse(ctx stdcontext.Context, sessionID, response, model string) error {
+//
+// `extras` carries any additional per-turn metadata the adapter could
+// extract (token usage, stop_reason, permission_mode, tool_version,
+// …). Adapters with no extras pass a zero-value struct.
+func attachResponse(ctx stdcontext.Context, sessionID, response, model string, extras store.AttachResponseInput) error {
 	s, err := openStore(ctx)
 	if err != nil {
 		return err
@@ -102,37 +119,89 @@ func attachResponse(ctx stdcontext.Context, sessionID, response, model string) e
 	}
 	resp := redact.Scrub(response)
 	for i := len(entries) - 1; i >= 0; i-- {
-		if entries[i].Response == "" {
-			return s.AttachResponse(ctx, entries[i].ID, resp, model, 0)
+		if entries[i].Response != "" {
+			continue
 		}
+		extras.EntryID = entries[i].ID
+		extras.Response = resp
+		if extras.Model == "" {
+			extras.Model = model
+		}
+		return s.AttachResponse(ctx, extras)
 	}
 	return nil
 }
 
-// lastAssistantTurn reads a Claude Code transcript JSONL file and
-// returns the text + model of the most recent `type:"assistant"` line.
-// Used as a race-free fallback when the Stop hook payload doesn't carry
-// `last_assistant_message`. Empty strings on any error.
-func lastAssistantTurn(path string) (text, model string) {
+// transcriptMeta is the structured metadata extracted from the most
+// recent assistant message line of a Claude Code transcript.
+//
+// All fields are best-effort — zero values mean the field wasn't
+// present in the source (which is fine for non-Anthropic tools that
+// don't emit `usage`). See assistant samples in ~/.claude/projects/*.jsonl
+// for the full shape.
+type transcriptMeta struct {
+	Text              string // flattened text from message.content[]
+	Model             string // message.model (e.g. "claude-opus-4-7")
+	StopReason        string // message.stop_reason (end_turn | tool_use | max_tokens | stop_sequence)
+	InputTokens       int    // message.usage.input_tokens
+	OutputTokens      int    // message.usage.output_tokens
+	CacheReadTokens   int    // message.usage.cache_read_input_tokens (Anthropic prompt cache HIT)
+	CacheCreateTokens int    // message.usage.cache_creation_input_tokens (cache WRITE)
+	ToolVersion       string // top-level "version" — Claude Code version string
+}
+
+// readTranscriptMeta scans the JSONL for the latest assistant line and
+// returns a populated transcriptMeta. retries / interval handle the
+// flush race (Stop hook can fire before the last line lands on disk).
+//
+// Pass retries=1 interval=0 for a one-shot read.
+func readTranscriptMeta(path string, retries int, interval time.Duration) transcriptMeta {
 	if path == "" {
-		return "", ""
+		return transcriptMeta{}
 	}
+	for attempt := 0; attempt < retries; attempt++ {
+		m := scanTranscriptOnce(path)
+		if m.Text != "" {
+			return m
+		}
+		if interval > 0 && attempt+1 < retries {
+			time.Sleep(interval)
+		}
+	}
+	return transcriptMeta{}
+}
+
+// scanTranscriptOnce performs a single full-file scan and returns the
+// latest assistant message's metadata.
+func scanTranscriptOnce(path string) transcriptMeta {
 	f, err := os.Open(path)
 	if err != nil {
-		return "", ""
+		return transcriptMeta{}
 	}
 	defer func() { _ = f.Close() }()
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 1024*1024), 32*1024*1024) // 32MB max line — assistant turns can be long
-	type msgLine struct {
-		Type    string `json:"type"`
-		Message struct {
-			Role    string          `json:"role"`
-			Content json.RawMessage `json:"content"`
-			Model   string          `json:"model"`
-		} `json:"message"`
+
+	type usage struct {
+		InputTokens              int `json:"input_tokens"`
+		OutputTokens             int `json:"output_tokens"`
+		CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+		CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
 	}
-	var lastText, lastModel string
+	type message struct {
+		Role       string          `json:"role"`
+		Content    json.RawMessage `json:"content"`
+		Model      string          `json:"model"`
+		StopReason string          `json:"stop_reason"`
+		Usage      usage           `json:"usage"`
+	}
+	type msgLine struct {
+		Type    string  `json:"type"`
+		Version string  `json:"version"`
+		Message message `json:"message"`
+	}
+
+	var last transcriptMeta
 	for scanner.Scan() {
 		var m msgLine
 		if err := json.Unmarshal(scanner.Bytes(), &m); err != nil {
@@ -141,15 +210,26 @@ func lastAssistantTurn(path string) (text, model string) {
 		if m.Type != "assistant" {
 			continue
 		}
-		// Content can be either a plain string or an array of typed blocks
-		// (text / tool_use / tool_result). flattenContent handles both.
+		// Content can be a string OR an array of typed blocks
+		// (text / thinking / tool_use). flattenContent extracts text.
 		t := flattenContent(m.Message.Content)
-		if t != "" {
-			lastText = t
-			lastModel = m.Message.Model
+		if t == "" {
+			// Don't overwrite the last good text if this assistant line
+			// only had a tool_use block — keep scanning forward.
+			continue
+		}
+		last = transcriptMeta{
+			Text:              t,
+			Model:             m.Message.Model,
+			StopReason:        m.Message.StopReason,
+			InputTokens:       m.Message.Usage.InputTokens,
+			OutputTokens:      m.Message.Usage.OutputTokens,
+			CacheReadTokens:   m.Message.Usage.CacheReadInputTokens,
+			CacheCreateTokens: m.Message.Usage.CacheCreationInputTokens,
+			ToolVersion:       m.Version,
 		}
 	}
-	return lastText, lastModel
+	return last
 }
 
 // hookDebug appends one line per hook invocation to ~/.ailog/hook.log.

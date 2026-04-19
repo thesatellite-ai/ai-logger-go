@@ -16,64 +16,102 @@ import (
 type Entry struct {
 	config `json:"-"`
 	// ID of the ent.
+	// UUID v7 generated at insert. Time-sortable, globally unique.
 	ID string `json:"id,omitempty"`
-	// Tool holds the value of the "tool" field.
+	// Name of the AI tool that produced this turn.
+	// Source: --tool flag on ailog add, or auto-set by per-tool hook adapter
+	// (claude-code | codex | opencode | generic | manual).
 	Tool string `json:"tool,omitempty"`
-	// Cwd holds the value of the "cwd" field.
+	// Version of the AI tool, if known.
+	// Source: Claude Code transcript JSONL (top-level "version" field, e.g. "2.1.114").
+	// Other tools: empty until their adapters extract it.
+	ToolVersion string `json:"tool_version,omitempty"`
+	// Working directory at capture time. Source: hook payload cwd OR auto-detected via os.Getwd().
 	Cwd string `json:"cwd,omitempty"`
-	// Project holds the value of the "project" field.
+	// Canonical "host/owner/repo" string derived from git remote.
+	// Source: cwd → walk up to .git → read remote.origin.url → canonicalize.
 	Project string `json:"project,omitempty"`
-	// RepoOwner holds the value of the "repo_owner" field.
+	// Repo owner (parsed from remote). Source: same as project.
 	RepoOwner string `json:"repo_owner,omitempty"`
-	// RepoName holds the value of the "repo_name" field.
+	// Repo name (parsed from remote). Source: same as project.
 	RepoName string `json:"repo_name,omitempty"`
-	// RepoRemote holds the value of the "repo_remote" field.
+	// Raw remote.origin.url, before canonicalization.
 	RepoRemote string `json:"repo_remote,omitempty"`
-	// GitBranch holds the value of the "git_branch" field.
+	// Current git branch at capture time. Source: `git rev-parse --abbrev-ref HEAD` in cwd.
 	GitBranch string `json:"git_branch,omitempty"`
-	// GitCommit holds the value of the "git_commit" field.
+	// Short git SHA at capture time. Source: `git rev-parse --short HEAD`.
 	GitCommit string `json:"git_commit,omitempty"`
-	// SessionID holds the value of the "session_id" field.
+	// Identifier grouping turns from one conversation.
+	// Source: hook payload session_id (claude-code: real Claude session UUID;
+	// other tools: tool-supplied; manual: --session flag or freshly generated).
 	SessionID string `json:"session_id,omitempty"`
-	// SessionName holds the value of the "session_name" field.
+	// User-assigned label for the session. Source: ailog session name CLI / web rename.
 	SessionName string `json:"session_name,omitempty"`
-	// TurnIndex holds the value of the "turn_index" field.
+	// 0-based index within the session. Auto-computed by Store.InsertEntry.
 	TurnIndex int `json:"turn_index,omitempty"`
-	// ParentEntryID holds the value of the "parent_entry_id" field.
+	// ailog id of the previous turn in this session. Auto-linked at insert.
 	ParentEntryID string `json:"parent_entry_id,omitempty"`
-	// Hostname holds the value of the "hostname" field.
+	// os.Hostname().
 	Hostname string `json:"hostname,omitempty"`
-	// User holds the value of the "user" field.
+	// $USER env var.
 	User string `json:"user,omitempty"`
-	// Shell holds the value of the "shell" field.
+	// basename of $SHELL env var.
 	Shell string `json:"shell,omitempty"`
-	// Terminal holds the value of the "terminal" field.
+	// $TERM_PROGRAM env var (iTerm.app, ghostty, …).
 	Terminal string `json:"terminal,omitempty"`
-	// TerminalTitle holds the value of the "terminal_title" field.
+	// Best-effort terminal title (env-only — see internal/context/env.go).
 	TerminalTitle string `json:"terminal_title,omitempty"`
-	// Tty holds the value of the "tty" field.
+	// Controlling tty path.
 	Tty string `json:"tty,omitempty"`
-	// Pid holds the value of the "pid" field.
+	// Parent process id ($AILOG_PARENT_PID env or os.Getppid()).
 	Pid int `json:"pid,omitempty"`
-	// Prompt holds the value of the "prompt" field.
+	// The user's prompt text, secret-scrubbed. Source: hook prompt field / --prompt flag / stdin.
 	Prompt string `json:"prompt,omitempty"`
-	// Response holds the value of the "response" field.
+	// The assistant's response text, secret-scrubbed.
+	// Source: claude-code Stop hook — prefers payload.last_assistant_message
+	// (race-free) and falls back to parsing the transcript jsonl.
 	Response string `json:"response,omitempty"`
-	// Model holds the value of the "model" field.
+	// Model identifier (e.g. "claude-opus-4-7").
+	// Source: Claude Code transcript message.model. Other tools: --model flag.
 	Model string `json:"model,omitempty"`
-	// Raw holds the value of the "raw" field.
+	// Free-form provenance blob. Currently used for:
+	// - claude-code: stores transcript_path so we can re-derive metadata if needed.
+	// - ailog import: SHA-256 hash of the source JSONL line, for idempotent backfill.
 	Raw string `json:"raw,omitempty"`
-	// TokenCountIn holds the value of the "token_count_in" field.
+	// Input tokens billed for this turn.
+	// Source: Claude Code Stop hook — transcript message.usage.input_tokens.
+	// Other tools: 0 unless adapter populates it.
 	TokenCountIn int `json:"token_count_in,omitempty"`
-	// TokenCountOut holds the value of the "token_count_out" field.
+	// Output tokens generated by the assistant for this turn.
+	// Source: Claude Code Stop hook — transcript message.usage.output_tokens.
 	TokenCountOut int `json:"token_count_out,omitempty"`
-	// Tags holds the value of the "tags" field.
+	// Tokens served from Anthropic's prompt cache (cache HIT).
+	// Source: Claude Code Stop hook — transcript message.usage.cache_read_input_tokens.
+	// High value = cache hit %; cheap turns. Anthropic-specific (zero for non-Claude tools).
+	TokenCountCacheRead int `json:"token_count_cache_read,omitempty"`
+	// Tokens written into Anthropic's prompt cache (cache MISS / write).
+	// Source: Claude Code Stop hook — transcript message.usage.cache_creation_input_tokens.
+	// Anthropic-specific.
+	TokenCountCacheCreate int `json:"token_count_cache_create,omitempty"`
+	// Why the assistant stopped this turn.
+	// Source: Claude Code Stop hook — transcript message.stop_reason.
+	// Common values: "end_turn" (normal), "tool_use" (mid-turn tool call),
+	// "max_tokens" (hit output cap), "stop_sequence". Distinguishes complete
+	// responses from interrupted ones for filtering / debugging.
+	StopReason string `json:"stop_reason,omitempty"`
+	// Claude Code permission mode at the moment of capture.
+	// Source: Claude Code hook payload "permission_mode" field
+	// (UserPromptSubmit and Stop both carry it).
+	// Values: "default" | "acceptEdits" | "bypassPermissions" | "plan".
+	// Lets you filter "everything I did in plan mode" or audit YOLO sessions.
+	PermissionMode string `json:"permission_mode,omitempty"`
+	// CSV of user-applied tags. Edited via ailog tag / web tag form.
 	Tags string `json:"tags,omitempty"`
-	// Starred holds the value of the "starred" field.
+	// User flag for templates / keepers.
 	Starred bool `json:"starred,omitempty"`
-	// Notes holds the value of the "notes" field.
+	// Free-form user annotation, markdown supported.
 	Notes string `json:"notes,omitempty"`
-	// CreatedAt holds the value of the "created_at" field.
+	// Insert wall time (UTC).
 	CreatedAt    time.Time `json:"created_at,omitempty"`
 	selectValues sql.SelectValues
 }
@@ -85,9 +123,9 @@ func (*Entry) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case entry.FieldStarred:
 			values[i] = new(sql.NullBool)
-		case entry.FieldTurnIndex, entry.FieldPid, entry.FieldTokenCountIn, entry.FieldTokenCountOut:
+		case entry.FieldTurnIndex, entry.FieldPid, entry.FieldTokenCountIn, entry.FieldTokenCountOut, entry.FieldTokenCountCacheRead, entry.FieldTokenCountCacheCreate:
 			values[i] = new(sql.NullInt64)
-		case entry.FieldID, entry.FieldTool, entry.FieldCwd, entry.FieldProject, entry.FieldRepoOwner, entry.FieldRepoName, entry.FieldRepoRemote, entry.FieldGitBranch, entry.FieldGitCommit, entry.FieldSessionID, entry.FieldSessionName, entry.FieldParentEntryID, entry.FieldHostname, entry.FieldUser, entry.FieldShell, entry.FieldTerminal, entry.FieldTerminalTitle, entry.FieldTty, entry.FieldPrompt, entry.FieldResponse, entry.FieldModel, entry.FieldRaw, entry.FieldTags, entry.FieldNotes:
+		case entry.FieldID, entry.FieldTool, entry.FieldToolVersion, entry.FieldCwd, entry.FieldProject, entry.FieldRepoOwner, entry.FieldRepoName, entry.FieldRepoRemote, entry.FieldGitBranch, entry.FieldGitCommit, entry.FieldSessionID, entry.FieldSessionName, entry.FieldParentEntryID, entry.FieldHostname, entry.FieldUser, entry.FieldShell, entry.FieldTerminal, entry.FieldTerminalTitle, entry.FieldTty, entry.FieldPrompt, entry.FieldResponse, entry.FieldModel, entry.FieldRaw, entry.FieldStopReason, entry.FieldPermissionMode, entry.FieldTags, entry.FieldNotes:
 			values[i] = new(sql.NullString)
 		case entry.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -117,6 +155,12 @@ func (_m *Entry) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field tool", values[i])
 			} else if value.Valid {
 				_m.Tool = value.String
+			}
+		case entry.FieldToolVersion:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field tool_version", values[i])
+			} else if value.Valid {
+				_m.ToolVersion = value.String
 			}
 		case entry.FieldCwd:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -262,6 +306,30 @@ func (_m *Entry) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.TokenCountOut = int(value.Int64)
 			}
+		case entry.FieldTokenCountCacheRead:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field token_count_cache_read", values[i])
+			} else if value.Valid {
+				_m.TokenCountCacheRead = int(value.Int64)
+			}
+		case entry.FieldTokenCountCacheCreate:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field token_count_cache_create", values[i])
+			} else if value.Valid {
+				_m.TokenCountCacheCreate = int(value.Int64)
+			}
+		case entry.FieldStopReason:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field stop_reason", values[i])
+			} else if value.Valid {
+				_m.StopReason = value.String
+			}
+		case entry.FieldPermissionMode:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field permission_mode", values[i])
+			} else if value.Valid {
+				_m.PermissionMode = value.String
+			}
 		case entry.FieldTags:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field tags", values[i])
@@ -324,6 +392,9 @@ func (_m *Entry) String() string {
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("tool=")
 	builder.WriteString(_m.Tool)
+	builder.WriteString(", ")
+	builder.WriteString("tool_version=")
+	builder.WriteString(_m.ToolVersion)
 	builder.WriteString(", ")
 	builder.WriteString("cwd=")
 	builder.WriteString(_m.Cwd)
@@ -396,6 +467,18 @@ func (_m *Entry) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("token_count_out=")
 	builder.WriteString(fmt.Sprintf("%v", _m.TokenCountOut))
+	builder.WriteString(", ")
+	builder.WriteString("token_count_cache_read=")
+	builder.WriteString(fmt.Sprintf("%v", _m.TokenCountCacheRead))
+	builder.WriteString(", ")
+	builder.WriteString("token_count_cache_create=")
+	builder.WriteString(fmt.Sprintf("%v", _m.TokenCountCacheCreate))
+	builder.WriteString(", ")
+	builder.WriteString("stop_reason=")
+	builder.WriteString(_m.StopReason)
+	builder.WriteString(", ")
+	builder.WriteString("permission_mode=")
+	builder.WriteString(_m.PermissionMode)
 	builder.WriteString(", ")
 	builder.WriteString("tags=")
 	builder.WriteString(_m.Tags)

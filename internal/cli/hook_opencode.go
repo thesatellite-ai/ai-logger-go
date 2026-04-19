@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/khanakia/ai-logger/internal/store"
 	"github.com/spf13/cobra"
 )
 
@@ -40,7 +41,9 @@ func newOpenCodeHookCmd() *cobra.Command {
 				if p.Prompt == "" {
 					return nil
 				}
-				return capturePrompt(cmd.Context(), "opencode", p.SessionID, p.CWD, p.Prompt, "")
+				return capturePrompt(cmd.Context(), promptCapture{
+					Tool: "opencode", SessionID: p.SessionID, CWD: p.CWD, Prompt: p.Prompt,
+				})
 			},
 		},
 		&cobra.Command{
@@ -56,7 +59,7 @@ func newOpenCodeHookCmd() *cobra.Command {
 				if p.SessionID == "" || p.Response == "" {
 					return nil
 				}
-				return attachResponse(cmd.Context(), p.SessionID, p.Response, p.Model)
+				return attachResponse(cmd.Context(), p.SessionID, p.Response, p.Model, store.AttachResponseInput{})
 			},
 		},
 	)

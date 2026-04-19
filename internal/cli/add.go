@@ -74,7 +74,12 @@ Examples:
 				if err != nil {
 					return err
 				}
-				if err := s.AttachResponse(ctx, id, response, model, tokensOut); err != nil {
+				if err := s.AttachResponse(ctx, store.AttachResponseInput{
+					EntryID:   id,
+					Response:  response,
+					Model:     model,
+					TokensOut: tokensOut,
+				}); err != nil {
 					return err
 				}
 				fmt.Fprintln(cmd.OutOrStdout(), id)

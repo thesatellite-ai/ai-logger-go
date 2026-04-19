@@ -34,6 +34,20 @@ func (_c *EntryCreate) SetNillableTool(v *string) *EntryCreate {
 	return _c
 }
 
+// SetToolVersion sets the "tool_version" field.
+func (_c *EntryCreate) SetToolVersion(v string) *EntryCreate {
+	_c.mutation.SetToolVersion(v)
+	return _c
+}
+
+// SetNillableToolVersion sets the "tool_version" field if the given value is not nil.
+func (_c *EntryCreate) SetNillableToolVersion(v *string) *EntryCreate {
+	if v != nil {
+		_c.SetToolVersion(*v)
+	}
+	return _c
+}
+
 // SetCwd sets the "cwd" field.
 func (_c *EntryCreate) SetCwd(v string) *EntryCreate {
 	_c.mutation.SetCwd(v)
@@ -370,6 +384,62 @@ func (_c *EntryCreate) SetNillableTokenCountOut(v *int) *EntryCreate {
 	return _c
 }
 
+// SetTokenCountCacheRead sets the "token_count_cache_read" field.
+func (_c *EntryCreate) SetTokenCountCacheRead(v int) *EntryCreate {
+	_c.mutation.SetTokenCountCacheRead(v)
+	return _c
+}
+
+// SetNillableTokenCountCacheRead sets the "token_count_cache_read" field if the given value is not nil.
+func (_c *EntryCreate) SetNillableTokenCountCacheRead(v *int) *EntryCreate {
+	if v != nil {
+		_c.SetTokenCountCacheRead(*v)
+	}
+	return _c
+}
+
+// SetTokenCountCacheCreate sets the "token_count_cache_create" field.
+func (_c *EntryCreate) SetTokenCountCacheCreate(v int) *EntryCreate {
+	_c.mutation.SetTokenCountCacheCreate(v)
+	return _c
+}
+
+// SetNillableTokenCountCacheCreate sets the "token_count_cache_create" field if the given value is not nil.
+func (_c *EntryCreate) SetNillableTokenCountCacheCreate(v *int) *EntryCreate {
+	if v != nil {
+		_c.SetTokenCountCacheCreate(*v)
+	}
+	return _c
+}
+
+// SetStopReason sets the "stop_reason" field.
+func (_c *EntryCreate) SetStopReason(v string) *EntryCreate {
+	_c.mutation.SetStopReason(v)
+	return _c
+}
+
+// SetNillableStopReason sets the "stop_reason" field if the given value is not nil.
+func (_c *EntryCreate) SetNillableStopReason(v *string) *EntryCreate {
+	if v != nil {
+		_c.SetStopReason(*v)
+	}
+	return _c
+}
+
+// SetPermissionMode sets the "permission_mode" field.
+func (_c *EntryCreate) SetPermissionMode(v string) *EntryCreate {
+	_c.mutation.SetPermissionMode(v)
+	return _c
+}
+
+// SetNillablePermissionMode sets the "permission_mode" field if the given value is not nil.
+func (_c *EntryCreate) SetNillablePermissionMode(v *string) *EntryCreate {
+	if v != nil {
+		_c.SetPermissionMode(*v)
+	}
+	return _c
+}
+
 // SetTags sets the "tags" field.
 func (_c *EntryCreate) SetTags(v string) *EntryCreate {
 	_c.mutation.SetTags(v)
@@ -471,6 +541,10 @@ func (_c *EntryCreate) defaults() {
 		v := entry.DefaultTool
 		_c.mutation.SetTool(v)
 	}
+	if _, ok := _c.mutation.ToolVersion(); !ok {
+		v := entry.DefaultToolVersion
+		_c.mutation.SetToolVersion(v)
+	}
 	if _, ok := _c.mutation.Cwd(); !ok {
 		v := entry.DefaultCwd
 		_c.mutation.SetCwd(v)
@@ -567,6 +641,22 @@ func (_c *EntryCreate) defaults() {
 		v := entry.DefaultTokenCountOut
 		_c.mutation.SetTokenCountOut(v)
 	}
+	if _, ok := _c.mutation.TokenCountCacheRead(); !ok {
+		v := entry.DefaultTokenCountCacheRead
+		_c.mutation.SetTokenCountCacheRead(v)
+	}
+	if _, ok := _c.mutation.TokenCountCacheCreate(); !ok {
+		v := entry.DefaultTokenCountCacheCreate
+		_c.mutation.SetTokenCountCacheCreate(v)
+	}
+	if _, ok := _c.mutation.StopReason(); !ok {
+		v := entry.DefaultStopReason
+		_c.mutation.SetStopReason(v)
+	}
+	if _, ok := _c.mutation.PermissionMode(); !ok {
+		v := entry.DefaultPermissionMode
+		_c.mutation.SetPermissionMode(v)
+	}
 	if _, ok := _c.mutation.Tags(); !ok {
 		v := entry.DefaultTags
 		_c.mutation.SetTags(v)
@@ -589,6 +679,9 @@ func (_c *EntryCreate) defaults() {
 func (_c *EntryCreate) check() error {
 	if _, ok := _c.mutation.Tool(); !ok {
 		return &ValidationError{Name: "tool", err: errors.New(`ent: missing required field "Entry.tool"`)}
+	}
+	if _, ok := _c.mutation.ToolVersion(); !ok {
+		return &ValidationError{Name: "tool_version", err: errors.New(`ent: missing required field "Entry.tool_version"`)}
 	}
 	if _, ok := _c.mutation.Cwd(); !ok {
 		return &ValidationError{Name: "cwd", err: errors.New(`ent: missing required field "Entry.cwd"`)}
@@ -662,6 +755,18 @@ func (_c *EntryCreate) check() error {
 	if _, ok := _c.mutation.TokenCountOut(); !ok {
 		return &ValidationError{Name: "token_count_out", err: errors.New(`ent: missing required field "Entry.token_count_out"`)}
 	}
+	if _, ok := _c.mutation.TokenCountCacheRead(); !ok {
+		return &ValidationError{Name: "token_count_cache_read", err: errors.New(`ent: missing required field "Entry.token_count_cache_read"`)}
+	}
+	if _, ok := _c.mutation.TokenCountCacheCreate(); !ok {
+		return &ValidationError{Name: "token_count_cache_create", err: errors.New(`ent: missing required field "Entry.token_count_cache_create"`)}
+	}
+	if _, ok := _c.mutation.StopReason(); !ok {
+		return &ValidationError{Name: "stop_reason", err: errors.New(`ent: missing required field "Entry.stop_reason"`)}
+	}
+	if _, ok := _c.mutation.PermissionMode(); !ok {
+		return &ValidationError{Name: "permission_mode", err: errors.New(`ent: missing required field "Entry.permission_mode"`)}
+	}
 	if _, ok := _c.mutation.Tags(); !ok {
 		return &ValidationError{Name: "tags", err: errors.New(`ent: missing required field "Entry.tags"`)}
 	}
@@ -717,6 +822,10 @@ func (_c *EntryCreate) createSpec() (*Entry, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Tool(); ok {
 		_spec.SetField(entry.FieldTool, field.TypeString, value)
 		_node.Tool = value
+	}
+	if value, ok := _c.mutation.ToolVersion(); ok {
+		_spec.SetField(entry.FieldToolVersion, field.TypeString, value)
+		_node.ToolVersion = value
 	}
 	if value, ok := _c.mutation.Cwd(); ok {
 		_spec.SetField(entry.FieldCwd, field.TypeString, value)
@@ -813,6 +922,22 @@ func (_c *EntryCreate) createSpec() (*Entry, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.TokenCountOut(); ok {
 		_spec.SetField(entry.FieldTokenCountOut, field.TypeInt, value)
 		_node.TokenCountOut = value
+	}
+	if value, ok := _c.mutation.TokenCountCacheRead(); ok {
+		_spec.SetField(entry.FieldTokenCountCacheRead, field.TypeInt, value)
+		_node.TokenCountCacheRead = value
+	}
+	if value, ok := _c.mutation.TokenCountCacheCreate(); ok {
+		_spec.SetField(entry.FieldTokenCountCacheCreate, field.TypeInt, value)
+		_node.TokenCountCacheCreate = value
+	}
+	if value, ok := _c.mutation.StopReason(); ok {
+		_spec.SetField(entry.FieldStopReason, field.TypeString, value)
+		_node.StopReason = value
+	}
+	if value, ok := _c.mutation.PermissionMode(); ok {
+		_spec.SetField(entry.FieldPermissionMode, field.TypeString, value)
+		_node.PermissionMode = value
 	}
 	if value, ok := _c.mutation.Tags(); ok {
 		_spec.SetField(entry.FieldTags, field.TypeString, value)

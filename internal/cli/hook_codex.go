@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/khanakia/ai-logger/internal/store"
 	"github.com/spf13/cobra"
 )
 
@@ -43,7 +44,9 @@ func newCodexHookCmd() *cobra.Command {
 				if p.Prompt == "" {
 					return nil
 				}
-				return capturePrompt(cmd.Context(), "codex", p.SessionID, p.CWD, p.Prompt, "")
+				return capturePrompt(cmd.Context(), promptCapture{
+					Tool: "codex", SessionID: p.SessionID, CWD: p.CWD, Prompt: p.Prompt,
+				})
 			},
 		},
 		&cobra.Command{
@@ -59,7 +62,7 @@ func newCodexHookCmd() *cobra.Command {
 				if p.SessionID == "" || p.Response == "" {
 					return nil
 				}
-				return attachResponse(cmd.Context(), p.SessionID, p.Response, p.Model)
+				return attachResponse(cmd.Context(), p.SessionID, p.Response, p.Model, store.AttachResponseInput{})
 			},
 		},
 	)

@@ -15,6 +15,8 @@ const (
 	FieldID = "id"
 	// FieldTool holds the string denoting the tool field in the database.
 	FieldTool = "tool"
+	// FieldToolVersion holds the string denoting the tool_version field in the database.
+	FieldToolVersion = "tool_version"
 	// FieldCwd holds the string denoting the cwd field in the database.
 	FieldCwd = "cwd"
 	// FieldProject holds the string denoting the project field in the database.
@@ -63,6 +65,14 @@ const (
 	FieldTokenCountIn = "token_count_in"
 	// FieldTokenCountOut holds the string denoting the token_count_out field in the database.
 	FieldTokenCountOut = "token_count_out"
+	// FieldTokenCountCacheRead holds the string denoting the token_count_cache_read field in the database.
+	FieldTokenCountCacheRead = "token_count_cache_read"
+	// FieldTokenCountCacheCreate holds the string denoting the token_count_cache_create field in the database.
+	FieldTokenCountCacheCreate = "token_count_cache_create"
+	// FieldStopReason holds the string denoting the stop_reason field in the database.
+	FieldStopReason = "stop_reason"
+	// FieldPermissionMode holds the string denoting the permission_mode field in the database.
+	FieldPermissionMode = "permission_mode"
 	// FieldTags holds the string denoting the tags field in the database.
 	FieldTags = "tags"
 	// FieldStarred holds the string denoting the starred field in the database.
@@ -79,6 +89,7 @@ const (
 var Columns = []string{
 	FieldID,
 	FieldTool,
+	FieldToolVersion,
 	FieldCwd,
 	FieldProject,
 	FieldRepoOwner,
@@ -103,6 +114,10 @@ var Columns = []string{
 	FieldRaw,
 	FieldTokenCountIn,
 	FieldTokenCountOut,
+	FieldTokenCountCacheRead,
+	FieldTokenCountCacheCreate,
+	FieldStopReason,
+	FieldPermissionMode,
 	FieldTags,
 	FieldStarred,
 	FieldNotes,
@@ -122,6 +137,8 @@ func ValidColumn(column string) bool {
 var (
 	// DefaultTool holds the default value on creation for the "tool" field.
 	DefaultTool string
+	// DefaultToolVersion holds the default value on creation for the "tool_version" field.
+	DefaultToolVersion string
 	// DefaultCwd holds the default value on creation for the "cwd" field.
 	DefaultCwd string
 	// DefaultProject holds the default value on creation for the "project" field.
@@ -170,6 +187,14 @@ var (
 	DefaultTokenCountIn int
 	// DefaultTokenCountOut holds the default value on creation for the "token_count_out" field.
 	DefaultTokenCountOut int
+	// DefaultTokenCountCacheRead holds the default value on creation for the "token_count_cache_read" field.
+	DefaultTokenCountCacheRead int
+	// DefaultTokenCountCacheCreate holds the default value on creation for the "token_count_cache_create" field.
+	DefaultTokenCountCacheCreate int
+	// DefaultStopReason holds the default value on creation for the "stop_reason" field.
+	DefaultStopReason string
+	// DefaultPermissionMode holds the default value on creation for the "permission_mode" field.
+	DefaultPermissionMode string
 	// DefaultTags holds the default value on creation for the "tags" field.
 	DefaultTags string
 	// DefaultStarred holds the default value on creation for the "starred" field.
@@ -193,6 +218,11 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 // ByTool orders the results by the tool field.
 func ByTool(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTool, opts...).ToFunc()
+}
+
+// ByToolVersion orders the results by the tool_version field.
+func ByToolVersion(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldToolVersion, opts...).ToFunc()
 }
 
 // ByCwd orders the results by the cwd field.
@@ -313,6 +343,26 @@ func ByTokenCountIn(opts ...sql.OrderTermOption) OrderOption {
 // ByTokenCountOut orders the results by the token_count_out field.
 func ByTokenCountOut(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTokenCountOut, opts...).ToFunc()
+}
+
+// ByTokenCountCacheRead orders the results by the token_count_cache_read field.
+func ByTokenCountCacheRead(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTokenCountCacheRead, opts...).ToFunc()
+}
+
+// ByTokenCountCacheCreate orders the results by the token_count_cache_create field.
+func ByTokenCountCacheCreate(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTokenCountCacheCreate, opts...).ToFunc()
+}
+
+// ByStopReason orders the results by the stop_reason field.
+func ByStopReason(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldStopReason, opts...).ToFunc()
+}
+
+// ByPermissionMode orders the results by the permission_mode field.
+func ByPermissionMode(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPermissionMode, opts...).ToFunc()
 }
 
 // ByTags orders the results by the tags field.

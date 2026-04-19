@@ -141,7 +141,11 @@ func importFile(cmd *cobra.Command, s *store.Store, path string) (int, int, erro
 			imported++
 		case "assistant":
 			if lastPromptID != "" {
-				if err := s.AttachResponse(ctx, lastPromptID, text, inner.Model, 0); err != nil {
+				if err := s.AttachResponse(ctx, store.AttachResponseInput{
+					EntryID:  lastPromptID,
+					Response: text,
+					Model:    inner.Model,
+				}); err != nil {
 					return imported, skipped, err
 				}
 				lastPromptID = ""

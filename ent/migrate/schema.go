@@ -13,6 +13,7 @@ var (
 	EntriesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeString, Unique: true},
 		{Name: "tool", Type: field.TypeString, Default: ""},
+		{Name: "tool_version", Type: field.TypeString, Default: ""},
 		{Name: "cwd", Type: field.TypeString, Default: ""},
 		{Name: "project", Type: field.TypeString, Default: ""},
 		{Name: "repo_owner", Type: field.TypeString, Default: ""},
@@ -37,6 +38,10 @@ var (
 		{Name: "raw", Type: field.TypeString, Size: 2147483647, Default: ""},
 		{Name: "token_count_in", Type: field.TypeInt, Default: 0},
 		{Name: "token_count_out", Type: field.TypeInt, Default: 0},
+		{Name: "token_count_cache_read", Type: field.TypeInt, Default: 0},
+		{Name: "token_count_cache_create", Type: field.TypeInt, Default: 0},
+		{Name: "stop_reason", Type: field.TypeString, Default: ""},
+		{Name: "permission_mode", Type: field.TypeString, Default: ""},
 		{Name: "tags", Type: field.TypeString, Default: ""},
 		{Name: "starred", Type: field.TypeBool, Default: false},
 		{Name: "notes", Type: field.TypeString, Size: 2147483647, Default: ""},
@@ -51,32 +56,37 @@ var (
 			{
 				Name:    "entry_project_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{EntriesColumns[3], EntriesColumns[29]},
+				Columns: []*schema.Column{EntriesColumns[4], EntriesColumns[34]},
 			},
 			{
 				Name:    "entry_tool_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{EntriesColumns[1], EntriesColumns[29]},
+				Columns: []*schema.Column{EntriesColumns[1], EntriesColumns[34]},
 			},
 			{
 				Name:    "entry_session_id_turn_index",
 				Unique:  false,
-				Columns: []*schema.Column{EntriesColumns[9], EntriesColumns[11]},
+				Columns: []*schema.Column{EntriesColumns[10], EntriesColumns[12]},
 			},
 			{
 				Name:    "entry_cwd_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{EntriesColumns[2], EntriesColumns[29]},
+				Columns: []*schema.Column{EntriesColumns[3], EntriesColumns[34]},
 			},
 			{
 				Name:    "entry_git_branch_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{EntriesColumns[7], EntriesColumns[29]},
+				Columns: []*schema.Column{EntriesColumns[8], EntriesColumns[34]},
 			},
 			{
 				Name:    "entry_starred",
 				Unique:  false,
-				Columns: []*schema.Column{EntriesColumns[27]},
+				Columns: []*schema.Column{EntriesColumns[32]},
+			},
+			{
+				Name:    "entry_permission_mode_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{EntriesColumns[30], EntriesColumns[34]},
 			},
 		},
 	}

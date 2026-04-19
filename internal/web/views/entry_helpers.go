@@ -14,11 +14,3 @@ func intStr(n int) string {
 func intStrAlways(n int) string {
 	return strconv.Itoa(n)
 }
-
-// intPair renders an "in · out" tokens pair, hiding the row when both zero.
-func intPair(a, b int) string {
-	if a == 0 && b == 0 {
-		return ""
-	}
-	return strconv.Itoa(a) + "  ·  " + strconv.Itoa(b)
-}

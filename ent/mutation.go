@@ -32,46 +32,53 @@ const (
 // EntryMutation represents an operation that mutates the Entry nodes in the graph.
 type EntryMutation struct {
 	config
-	op                 Op
-	typ                string
-	id                 *string
-	tool               *string
-	cwd                *string
-	project            *string
-	repo_owner         *string
-	repo_name          *string
-	repo_remote        *string
-	git_branch         *string
-	git_commit         *string
-	session_id         *string
-	session_name       *string
-	turn_index         *int
-	addturn_index      *int
-	parent_entry_id    *string
-	hostname           *string
-	user               *string
-	shell              *string
-	terminal           *string
-	terminal_title     *string
-	tty                *string
-	pid                *int
-	addpid             *int
-	prompt             *string
-	response           *string
-	model              *string
-	raw                *string
-	token_count_in     *int
-	addtoken_count_in  *int
-	token_count_out    *int
-	addtoken_count_out *int
-	tags               *string
-	starred            *bool
-	notes              *string
-	created_at         *time.Time
-	clearedFields      map[string]struct{}
-	done               bool
-	oldValue           func(context.Context) (*Entry, error)
-	predicates         []predicate.Entry
+	op                          Op
+	typ                         string
+	id                          *string
+	tool                        *string
+	tool_version                *string
+	cwd                         *string
+	project                     *string
+	repo_owner                  *string
+	repo_name                   *string
+	repo_remote                 *string
+	git_branch                  *string
+	git_commit                  *string
+	session_id                  *string
+	session_name                *string
+	turn_index                  *int
+	addturn_index               *int
+	parent_entry_id             *string
+	hostname                    *string
+	user                        *string
+	shell                       *string
+	terminal                    *string
+	terminal_title              *string
+	tty                         *string
+	pid                         *int
+	addpid                      *int
+	prompt                      *string
+	response                    *string
+	model                       *string
+	raw                         *string
+	token_count_in              *int
+	addtoken_count_in           *int
+	token_count_out             *int
+	addtoken_count_out          *int
+	token_count_cache_read      *int
+	addtoken_count_cache_read   *int
+	token_count_cache_create    *int
+	addtoken_count_cache_create *int
+	stop_reason                 *string
+	permission_mode             *string
+	tags                        *string
+	starred                     *bool
+	notes                       *string
+	created_at                  *time.Time
+	clearedFields               map[string]struct{}
+	done                        bool
+	oldValue                    func(context.Context) (*Entry, error)
+	predicates                  []predicate.Entry
 }
 
 var _ ent.Mutation = (*EntryMutation)(nil)
@@ -212,6 +219,42 @@ func (m *EntryMutation) OldTool(ctx context.Context) (v string, err error) {
 // ResetTool resets all changes to the "tool" field.
 func (m *EntryMutation) ResetTool() {
 	m.tool = nil
+}
+
+// SetToolVersion sets the "tool_version" field.
+func (m *EntryMutation) SetToolVersion(s string) {
+	m.tool_version = &s
+}
+
+// ToolVersion returns the value of the "tool_version" field in the mutation.
+func (m *EntryMutation) ToolVersion() (r string, exists bool) {
+	v := m.tool_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldToolVersion returns the old "tool_version" field's value of the Entry entity.
+// If the Entry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntryMutation) OldToolVersion(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldToolVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldToolVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldToolVersion: %w", err)
+	}
+	return oldValue.ToolVersion, nil
+}
+
+// ResetToolVersion resets all changes to the "tool_version" field.
+func (m *EntryMutation) ResetToolVersion() {
+	m.tool_version = nil
 }
 
 // SetCwd sets the "cwd" field.
@@ -1158,6 +1201,190 @@ func (m *EntryMutation) ResetTokenCountOut() {
 	m.addtoken_count_out = nil
 }
 
+// SetTokenCountCacheRead sets the "token_count_cache_read" field.
+func (m *EntryMutation) SetTokenCountCacheRead(i int) {
+	m.token_count_cache_read = &i
+	m.addtoken_count_cache_read = nil
+}
+
+// TokenCountCacheRead returns the value of the "token_count_cache_read" field in the mutation.
+func (m *EntryMutation) TokenCountCacheRead() (r int, exists bool) {
+	v := m.token_count_cache_read
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTokenCountCacheRead returns the old "token_count_cache_read" field's value of the Entry entity.
+// If the Entry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntryMutation) OldTokenCountCacheRead(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTokenCountCacheRead is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTokenCountCacheRead requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTokenCountCacheRead: %w", err)
+	}
+	return oldValue.TokenCountCacheRead, nil
+}
+
+// AddTokenCountCacheRead adds i to the "token_count_cache_read" field.
+func (m *EntryMutation) AddTokenCountCacheRead(i int) {
+	if m.addtoken_count_cache_read != nil {
+		*m.addtoken_count_cache_read += i
+	} else {
+		m.addtoken_count_cache_read = &i
+	}
+}
+
+// AddedTokenCountCacheRead returns the value that was added to the "token_count_cache_read" field in this mutation.
+func (m *EntryMutation) AddedTokenCountCacheRead() (r int, exists bool) {
+	v := m.addtoken_count_cache_read
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetTokenCountCacheRead resets all changes to the "token_count_cache_read" field.
+func (m *EntryMutation) ResetTokenCountCacheRead() {
+	m.token_count_cache_read = nil
+	m.addtoken_count_cache_read = nil
+}
+
+// SetTokenCountCacheCreate sets the "token_count_cache_create" field.
+func (m *EntryMutation) SetTokenCountCacheCreate(i int) {
+	m.token_count_cache_create = &i
+	m.addtoken_count_cache_create = nil
+}
+
+// TokenCountCacheCreate returns the value of the "token_count_cache_create" field in the mutation.
+func (m *EntryMutation) TokenCountCacheCreate() (r int, exists bool) {
+	v := m.token_count_cache_create
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTokenCountCacheCreate returns the old "token_count_cache_create" field's value of the Entry entity.
+// If the Entry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntryMutation) OldTokenCountCacheCreate(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTokenCountCacheCreate is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTokenCountCacheCreate requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTokenCountCacheCreate: %w", err)
+	}
+	return oldValue.TokenCountCacheCreate, nil
+}
+
+// AddTokenCountCacheCreate adds i to the "token_count_cache_create" field.
+func (m *EntryMutation) AddTokenCountCacheCreate(i int) {
+	if m.addtoken_count_cache_create != nil {
+		*m.addtoken_count_cache_create += i
+	} else {
+		m.addtoken_count_cache_create = &i
+	}
+}
+
+// AddedTokenCountCacheCreate returns the value that was added to the "token_count_cache_create" field in this mutation.
+func (m *EntryMutation) AddedTokenCountCacheCreate() (r int, exists bool) {
+	v := m.addtoken_count_cache_create
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetTokenCountCacheCreate resets all changes to the "token_count_cache_create" field.
+func (m *EntryMutation) ResetTokenCountCacheCreate() {
+	m.token_count_cache_create = nil
+	m.addtoken_count_cache_create = nil
+}
+
+// SetStopReason sets the "stop_reason" field.
+func (m *EntryMutation) SetStopReason(s string) {
+	m.stop_reason = &s
+}
+
+// StopReason returns the value of the "stop_reason" field in the mutation.
+func (m *EntryMutation) StopReason() (r string, exists bool) {
+	v := m.stop_reason
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStopReason returns the old "stop_reason" field's value of the Entry entity.
+// If the Entry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntryMutation) OldStopReason(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStopReason is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStopReason requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStopReason: %w", err)
+	}
+	return oldValue.StopReason, nil
+}
+
+// ResetStopReason resets all changes to the "stop_reason" field.
+func (m *EntryMutation) ResetStopReason() {
+	m.stop_reason = nil
+}
+
+// SetPermissionMode sets the "permission_mode" field.
+func (m *EntryMutation) SetPermissionMode(s string) {
+	m.permission_mode = &s
+}
+
+// PermissionMode returns the value of the "permission_mode" field in the mutation.
+func (m *EntryMutation) PermissionMode() (r string, exists bool) {
+	v := m.permission_mode
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPermissionMode returns the old "permission_mode" field's value of the Entry entity.
+// If the Entry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntryMutation) OldPermissionMode(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPermissionMode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPermissionMode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPermissionMode: %w", err)
+	}
+	return oldValue.PermissionMode, nil
+}
+
+// ResetPermissionMode resets all changes to the "permission_mode" field.
+func (m *EntryMutation) ResetPermissionMode() {
+	m.permission_mode = nil
+}
+
 // SetTags sets the "tags" field.
 func (m *EntryMutation) SetTags(s string) {
 	m.tags = &s
@@ -1336,9 +1563,12 @@ func (m *EntryMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *EntryMutation) Fields() []string {
-	fields := make([]string, 0, 29)
+	fields := make([]string, 0, 34)
 	if m.tool != nil {
 		fields = append(fields, entry.FieldTool)
+	}
+	if m.tool_version != nil {
+		fields = append(fields, entry.FieldToolVersion)
 	}
 	if m.cwd != nil {
 		fields = append(fields, entry.FieldCwd)
@@ -1412,6 +1642,18 @@ func (m *EntryMutation) Fields() []string {
 	if m.token_count_out != nil {
 		fields = append(fields, entry.FieldTokenCountOut)
 	}
+	if m.token_count_cache_read != nil {
+		fields = append(fields, entry.FieldTokenCountCacheRead)
+	}
+	if m.token_count_cache_create != nil {
+		fields = append(fields, entry.FieldTokenCountCacheCreate)
+	}
+	if m.stop_reason != nil {
+		fields = append(fields, entry.FieldStopReason)
+	}
+	if m.permission_mode != nil {
+		fields = append(fields, entry.FieldPermissionMode)
+	}
 	if m.tags != nil {
 		fields = append(fields, entry.FieldTags)
 	}
@@ -1434,6 +1676,8 @@ func (m *EntryMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	case entry.FieldTool:
 		return m.Tool()
+	case entry.FieldToolVersion:
+		return m.ToolVersion()
 	case entry.FieldCwd:
 		return m.Cwd()
 	case entry.FieldProject:
@@ -1482,6 +1726,14 @@ func (m *EntryMutation) Field(name string) (ent.Value, bool) {
 		return m.TokenCountIn()
 	case entry.FieldTokenCountOut:
 		return m.TokenCountOut()
+	case entry.FieldTokenCountCacheRead:
+		return m.TokenCountCacheRead()
+	case entry.FieldTokenCountCacheCreate:
+		return m.TokenCountCacheCreate()
+	case entry.FieldStopReason:
+		return m.StopReason()
+	case entry.FieldPermissionMode:
+		return m.PermissionMode()
 	case entry.FieldTags:
 		return m.Tags()
 	case entry.FieldStarred:
@@ -1501,6 +1753,8 @@ func (m *EntryMutation) OldField(ctx context.Context, name string) (ent.Value, e
 	switch name {
 	case entry.FieldTool:
 		return m.OldTool(ctx)
+	case entry.FieldToolVersion:
+		return m.OldToolVersion(ctx)
 	case entry.FieldCwd:
 		return m.OldCwd(ctx)
 	case entry.FieldProject:
@@ -1549,6 +1803,14 @@ func (m *EntryMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldTokenCountIn(ctx)
 	case entry.FieldTokenCountOut:
 		return m.OldTokenCountOut(ctx)
+	case entry.FieldTokenCountCacheRead:
+		return m.OldTokenCountCacheRead(ctx)
+	case entry.FieldTokenCountCacheCreate:
+		return m.OldTokenCountCacheCreate(ctx)
+	case entry.FieldStopReason:
+		return m.OldStopReason(ctx)
+	case entry.FieldPermissionMode:
+		return m.OldPermissionMode(ctx)
 	case entry.FieldTags:
 		return m.OldTags(ctx)
 	case entry.FieldStarred:
@@ -1572,6 +1834,13 @@ func (m *EntryMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetTool(v)
+		return nil
+	case entry.FieldToolVersion:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetToolVersion(v)
 		return nil
 	case entry.FieldCwd:
 		v, ok := value.(string)
@@ -1741,6 +2010,34 @@ func (m *EntryMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetTokenCountOut(v)
 		return nil
+	case entry.FieldTokenCountCacheRead:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTokenCountCacheRead(v)
+		return nil
+	case entry.FieldTokenCountCacheCreate:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTokenCountCacheCreate(v)
+		return nil
+	case entry.FieldStopReason:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStopReason(v)
+		return nil
+	case entry.FieldPermissionMode:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPermissionMode(v)
+		return nil
 	case entry.FieldTags:
 		v, ok := value.(string)
 		if !ok {
@@ -1789,6 +2086,12 @@ func (m *EntryMutation) AddedFields() []string {
 	if m.addtoken_count_out != nil {
 		fields = append(fields, entry.FieldTokenCountOut)
 	}
+	if m.addtoken_count_cache_read != nil {
+		fields = append(fields, entry.FieldTokenCountCacheRead)
+	}
+	if m.addtoken_count_cache_create != nil {
+		fields = append(fields, entry.FieldTokenCountCacheCreate)
+	}
 	return fields
 }
 
@@ -1805,6 +2108,10 @@ func (m *EntryMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedTokenCountIn()
 	case entry.FieldTokenCountOut:
 		return m.AddedTokenCountOut()
+	case entry.FieldTokenCountCacheRead:
+		return m.AddedTokenCountCacheRead()
+	case entry.FieldTokenCountCacheCreate:
+		return m.AddedTokenCountCacheCreate()
 	}
 	return nil, false
 }
@@ -1842,6 +2149,20 @@ func (m *EntryMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddTokenCountOut(v)
 		return nil
+	case entry.FieldTokenCountCacheRead:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddTokenCountCacheRead(v)
+		return nil
+	case entry.FieldTokenCountCacheCreate:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddTokenCountCacheCreate(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Entry numeric field %s", name)
 }
@@ -1871,6 +2192,9 @@ func (m *EntryMutation) ResetField(name string) error {
 	switch name {
 	case entry.FieldTool:
 		m.ResetTool()
+		return nil
+	case entry.FieldToolVersion:
+		m.ResetToolVersion()
 		return nil
 	case entry.FieldCwd:
 		m.ResetCwd()
@@ -1943,6 +2267,18 @@ func (m *EntryMutation) ResetField(name string) error {
 		return nil
 	case entry.FieldTokenCountOut:
 		m.ResetTokenCountOut()
+		return nil
+	case entry.FieldTokenCountCacheRead:
+		m.ResetTokenCountCacheRead()
+		return nil
+	case entry.FieldTokenCountCacheCreate:
+		m.ResetTokenCountCacheCreate()
+		return nil
+	case entry.FieldStopReason:
+		m.ResetStopReason()
+		return nil
+	case entry.FieldPermissionMode:
+		m.ResetPermissionMode()
 		return nil
 	case entry.FieldTags:
 		m.ResetTags()

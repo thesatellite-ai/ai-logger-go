@@ -69,6 +69,11 @@ func Tool(v string) predicate.Entry {
 	return predicate.Entry(sql.FieldEQ(FieldTool, v))
 }
 
+// ToolVersion applies equality check predicate on the "tool_version" field. It's identical to ToolVersionEQ.
+func ToolVersion(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldEQ(FieldToolVersion, v))
+}
+
 // Cwd applies equality check predicate on the "cwd" field. It's identical to CwdEQ.
 func Cwd(v string) predicate.Entry {
 	return predicate.Entry(sql.FieldEQ(FieldCwd, v))
@@ -189,6 +194,26 @@ func TokenCountOut(v int) predicate.Entry {
 	return predicate.Entry(sql.FieldEQ(FieldTokenCountOut, v))
 }
 
+// TokenCountCacheRead applies equality check predicate on the "token_count_cache_read" field. It's identical to TokenCountCacheReadEQ.
+func TokenCountCacheRead(v int) predicate.Entry {
+	return predicate.Entry(sql.FieldEQ(FieldTokenCountCacheRead, v))
+}
+
+// TokenCountCacheCreate applies equality check predicate on the "token_count_cache_create" field. It's identical to TokenCountCacheCreateEQ.
+func TokenCountCacheCreate(v int) predicate.Entry {
+	return predicate.Entry(sql.FieldEQ(FieldTokenCountCacheCreate, v))
+}
+
+// StopReason applies equality check predicate on the "stop_reason" field. It's identical to StopReasonEQ.
+func StopReason(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldEQ(FieldStopReason, v))
+}
+
+// PermissionMode applies equality check predicate on the "permission_mode" field. It's identical to PermissionModeEQ.
+func PermissionMode(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldEQ(FieldPermissionMode, v))
+}
+
 // Tags applies equality check predicate on the "tags" field. It's identical to TagsEQ.
 func Tags(v string) predicate.Entry {
 	return predicate.Entry(sql.FieldEQ(FieldTags, v))
@@ -272,6 +297,71 @@ func ToolEqualFold(v string) predicate.Entry {
 // ToolContainsFold applies the ContainsFold predicate on the "tool" field.
 func ToolContainsFold(v string) predicate.Entry {
 	return predicate.Entry(sql.FieldContainsFold(FieldTool, v))
+}
+
+// ToolVersionEQ applies the EQ predicate on the "tool_version" field.
+func ToolVersionEQ(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldEQ(FieldToolVersion, v))
+}
+
+// ToolVersionNEQ applies the NEQ predicate on the "tool_version" field.
+func ToolVersionNEQ(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldNEQ(FieldToolVersion, v))
+}
+
+// ToolVersionIn applies the In predicate on the "tool_version" field.
+func ToolVersionIn(vs ...string) predicate.Entry {
+	return predicate.Entry(sql.FieldIn(FieldToolVersion, vs...))
+}
+
+// ToolVersionNotIn applies the NotIn predicate on the "tool_version" field.
+func ToolVersionNotIn(vs ...string) predicate.Entry {
+	return predicate.Entry(sql.FieldNotIn(FieldToolVersion, vs...))
+}
+
+// ToolVersionGT applies the GT predicate on the "tool_version" field.
+func ToolVersionGT(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldGT(FieldToolVersion, v))
+}
+
+// ToolVersionGTE applies the GTE predicate on the "tool_version" field.
+func ToolVersionGTE(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldGTE(FieldToolVersion, v))
+}
+
+// ToolVersionLT applies the LT predicate on the "tool_version" field.
+func ToolVersionLT(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldLT(FieldToolVersion, v))
+}
+
+// ToolVersionLTE applies the LTE predicate on the "tool_version" field.
+func ToolVersionLTE(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldLTE(FieldToolVersion, v))
+}
+
+// ToolVersionContains applies the Contains predicate on the "tool_version" field.
+func ToolVersionContains(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldContains(FieldToolVersion, v))
+}
+
+// ToolVersionHasPrefix applies the HasPrefix predicate on the "tool_version" field.
+func ToolVersionHasPrefix(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldHasPrefix(FieldToolVersion, v))
+}
+
+// ToolVersionHasSuffix applies the HasSuffix predicate on the "tool_version" field.
+func ToolVersionHasSuffix(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldHasSuffix(FieldToolVersion, v))
+}
+
+// ToolVersionEqualFold applies the EqualFold predicate on the "tool_version" field.
+func ToolVersionEqualFold(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldEqualFold(FieldToolVersion, v))
+}
+
+// ToolVersionContainsFold applies the ContainsFold predicate on the "tool_version" field.
+func ToolVersionContainsFold(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldContainsFold(FieldToolVersion, v))
 }
 
 // CwdEQ applies the EQ predicate on the "cwd" field.
@@ -1732,6 +1822,216 @@ func TokenCountOutLT(v int) predicate.Entry {
 // TokenCountOutLTE applies the LTE predicate on the "token_count_out" field.
 func TokenCountOutLTE(v int) predicate.Entry {
 	return predicate.Entry(sql.FieldLTE(FieldTokenCountOut, v))
+}
+
+// TokenCountCacheReadEQ applies the EQ predicate on the "token_count_cache_read" field.
+func TokenCountCacheReadEQ(v int) predicate.Entry {
+	return predicate.Entry(sql.FieldEQ(FieldTokenCountCacheRead, v))
+}
+
+// TokenCountCacheReadNEQ applies the NEQ predicate on the "token_count_cache_read" field.
+func TokenCountCacheReadNEQ(v int) predicate.Entry {
+	return predicate.Entry(sql.FieldNEQ(FieldTokenCountCacheRead, v))
+}
+
+// TokenCountCacheReadIn applies the In predicate on the "token_count_cache_read" field.
+func TokenCountCacheReadIn(vs ...int) predicate.Entry {
+	return predicate.Entry(sql.FieldIn(FieldTokenCountCacheRead, vs...))
+}
+
+// TokenCountCacheReadNotIn applies the NotIn predicate on the "token_count_cache_read" field.
+func TokenCountCacheReadNotIn(vs ...int) predicate.Entry {
+	return predicate.Entry(sql.FieldNotIn(FieldTokenCountCacheRead, vs...))
+}
+
+// TokenCountCacheReadGT applies the GT predicate on the "token_count_cache_read" field.
+func TokenCountCacheReadGT(v int) predicate.Entry {
+	return predicate.Entry(sql.FieldGT(FieldTokenCountCacheRead, v))
+}
+
+// TokenCountCacheReadGTE applies the GTE predicate on the "token_count_cache_read" field.
+func TokenCountCacheReadGTE(v int) predicate.Entry {
+	return predicate.Entry(sql.FieldGTE(FieldTokenCountCacheRead, v))
+}
+
+// TokenCountCacheReadLT applies the LT predicate on the "token_count_cache_read" field.
+func TokenCountCacheReadLT(v int) predicate.Entry {
+	return predicate.Entry(sql.FieldLT(FieldTokenCountCacheRead, v))
+}
+
+// TokenCountCacheReadLTE applies the LTE predicate on the "token_count_cache_read" field.
+func TokenCountCacheReadLTE(v int) predicate.Entry {
+	return predicate.Entry(sql.FieldLTE(FieldTokenCountCacheRead, v))
+}
+
+// TokenCountCacheCreateEQ applies the EQ predicate on the "token_count_cache_create" field.
+func TokenCountCacheCreateEQ(v int) predicate.Entry {
+	return predicate.Entry(sql.FieldEQ(FieldTokenCountCacheCreate, v))
+}
+
+// TokenCountCacheCreateNEQ applies the NEQ predicate on the "token_count_cache_create" field.
+func TokenCountCacheCreateNEQ(v int) predicate.Entry {
+	return predicate.Entry(sql.FieldNEQ(FieldTokenCountCacheCreate, v))
+}
+
+// TokenCountCacheCreateIn applies the In predicate on the "token_count_cache_create" field.
+func TokenCountCacheCreateIn(vs ...int) predicate.Entry {
+	return predicate.Entry(sql.FieldIn(FieldTokenCountCacheCreate, vs...))
+}
+
+// TokenCountCacheCreateNotIn applies the NotIn predicate on the "token_count_cache_create" field.
+func TokenCountCacheCreateNotIn(vs ...int) predicate.Entry {
+	return predicate.Entry(sql.FieldNotIn(FieldTokenCountCacheCreate, vs...))
+}
+
+// TokenCountCacheCreateGT applies the GT predicate on the "token_count_cache_create" field.
+func TokenCountCacheCreateGT(v int) predicate.Entry {
+	return predicate.Entry(sql.FieldGT(FieldTokenCountCacheCreate, v))
+}
+
+// TokenCountCacheCreateGTE applies the GTE predicate on the "token_count_cache_create" field.
+func TokenCountCacheCreateGTE(v int) predicate.Entry {
+	return predicate.Entry(sql.FieldGTE(FieldTokenCountCacheCreate, v))
+}
+
+// TokenCountCacheCreateLT applies the LT predicate on the "token_count_cache_create" field.
+func TokenCountCacheCreateLT(v int) predicate.Entry {
+	return predicate.Entry(sql.FieldLT(FieldTokenCountCacheCreate, v))
+}
+
+// TokenCountCacheCreateLTE applies the LTE predicate on the "token_count_cache_create" field.
+func TokenCountCacheCreateLTE(v int) predicate.Entry {
+	return predicate.Entry(sql.FieldLTE(FieldTokenCountCacheCreate, v))
+}
+
+// StopReasonEQ applies the EQ predicate on the "stop_reason" field.
+func StopReasonEQ(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldEQ(FieldStopReason, v))
+}
+
+// StopReasonNEQ applies the NEQ predicate on the "stop_reason" field.
+func StopReasonNEQ(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldNEQ(FieldStopReason, v))
+}
+
+// StopReasonIn applies the In predicate on the "stop_reason" field.
+func StopReasonIn(vs ...string) predicate.Entry {
+	return predicate.Entry(sql.FieldIn(FieldStopReason, vs...))
+}
+
+// StopReasonNotIn applies the NotIn predicate on the "stop_reason" field.
+func StopReasonNotIn(vs ...string) predicate.Entry {
+	return predicate.Entry(sql.FieldNotIn(FieldStopReason, vs...))
+}
+
+// StopReasonGT applies the GT predicate on the "stop_reason" field.
+func StopReasonGT(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldGT(FieldStopReason, v))
+}
+
+// StopReasonGTE applies the GTE predicate on the "stop_reason" field.
+func StopReasonGTE(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldGTE(FieldStopReason, v))
+}
+
+// StopReasonLT applies the LT predicate on the "stop_reason" field.
+func StopReasonLT(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldLT(FieldStopReason, v))
+}
+
+// StopReasonLTE applies the LTE predicate on the "stop_reason" field.
+func StopReasonLTE(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldLTE(FieldStopReason, v))
+}
+
+// StopReasonContains applies the Contains predicate on the "stop_reason" field.
+func StopReasonContains(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldContains(FieldStopReason, v))
+}
+
+// StopReasonHasPrefix applies the HasPrefix predicate on the "stop_reason" field.
+func StopReasonHasPrefix(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldHasPrefix(FieldStopReason, v))
+}
+
+// StopReasonHasSuffix applies the HasSuffix predicate on the "stop_reason" field.
+func StopReasonHasSuffix(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldHasSuffix(FieldStopReason, v))
+}
+
+// StopReasonEqualFold applies the EqualFold predicate on the "stop_reason" field.
+func StopReasonEqualFold(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldEqualFold(FieldStopReason, v))
+}
+
+// StopReasonContainsFold applies the ContainsFold predicate on the "stop_reason" field.
+func StopReasonContainsFold(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldContainsFold(FieldStopReason, v))
+}
+
+// PermissionModeEQ applies the EQ predicate on the "permission_mode" field.
+func PermissionModeEQ(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldEQ(FieldPermissionMode, v))
+}
+
+// PermissionModeNEQ applies the NEQ predicate on the "permission_mode" field.
+func PermissionModeNEQ(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldNEQ(FieldPermissionMode, v))
+}
+
+// PermissionModeIn applies the In predicate on the "permission_mode" field.
+func PermissionModeIn(vs ...string) predicate.Entry {
+	return predicate.Entry(sql.FieldIn(FieldPermissionMode, vs...))
+}
+
+// PermissionModeNotIn applies the NotIn predicate on the "permission_mode" field.
+func PermissionModeNotIn(vs ...string) predicate.Entry {
+	return predicate.Entry(sql.FieldNotIn(FieldPermissionMode, vs...))
+}
+
+// PermissionModeGT applies the GT predicate on the "permission_mode" field.
+func PermissionModeGT(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldGT(FieldPermissionMode, v))
+}
+
+// PermissionModeGTE applies the GTE predicate on the "permission_mode" field.
+func PermissionModeGTE(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldGTE(FieldPermissionMode, v))
+}
+
+// PermissionModeLT applies the LT predicate on the "permission_mode" field.
+func PermissionModeLT(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldLT(FieldPermissionMode, v))
+}
+
+// PermissionModeLTE applies the LTE predicate on the "permission_mode" field.
+func PermissionModeLTE(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldLTE(FieldPermissionMode, v))
+}
+
+// PermissionModeContains applies the Contains predicate on the "permission_mode" field.
+func PermissionModeContains(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldContains(FieldPermissionMode, v))
+}
+
+// PermissionModeHasPrefix applies the HasPrefix predicate on the "permission_mode" field.
+func PermissionModeHasPrefix(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldHasPrefix(FieldPermissionMode, v))
+}
+
+// PermissionModeHasSuffix applies the HasSuffix predicate on the "permission_mode" field.
+func PermissionModeHasSuffix(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldHasSuffix(FieldPermissionMode, v))
+}
+
+// PermissionModeEqualFold applies the EqualFold predicate on the "permission_mode" field.
+func PermissionModeEqualFold(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldEqualFold(FieldPermissionMode, v))
+}
+
+// PermissionModeContainsFold applies the ContainsFold predicate on the "permission_mode" field.
+func PermissionModeContainsFold(v string) predicate.Entry {
+	return predicate.Entry(sql.FieldContainsFold(FieldPermissionMode, v))
 }
 
 // TagsEQ applies the EQ predicate on the "tags" field.
