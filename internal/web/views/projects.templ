@@ -8,26 +8,43 @@ type ProjectRow struct {
 	Count   int
 }
 
-// Projects renders the project leaderboard — every distinct project
-// the store has ever seen, with entry counts.
+// Projects renders the project leaderboard — every distinct project,
+// ranked, with entry counts.
 templ Projects(rows []ProjectRow) {
 	@Layout("Projects") {
-		<h1 class="text-xl font-semibold mb-4">Projects</h1>
+		<header class="page-head">
+			<h1 class="page-head__title">All <em>projects</em></h1>
+			<span class="page-head__sub">{ strconv.Itoa(len(rows)) } total</span>
+		</header>
 		if len(rows) == 0 {
-			<p class="text-sm text-slate-500 dark:text-slate-400">No projects detected yet.</p>
+			<div class="empty">
+				<p class="empty__quote">No projects detected yet.</p>
+				<p class="empty__hint">Project name comes from <code>git config --get remote.origin.url</code> in the entry's cwd.</p>
+			</div>
 		} else {
-			<ul class="space-y-1">
-				for _, r := range rows {
-					<li class="flex items-center justify-between rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2">
-						if r.Project == "(none)" {
-							<span class="font-mono text-sm text-slate-500 dark:text-slate-400 truncate" title="entries with no detected project">{ r.Project }</span>
-						} else {
-							<a href={ templ.SafeURL("/search?project=" + r.Project) } class="font-mono text-sm text-blue-600 dark:text-blue-400 hover:underline truncate">{ r.Project }</a>
-						}
-						<span class="text-xs text-slate-500 dark:text-slate-400 ml-3">{ strconv.Itoa(r.Count) }</span>
-					</li>
+			<div class="leaderboard">
+				for i, r := range rows {
+					<div class={ "leaderboard-row", templ.KV("leaderboard-row--muted", r.Project == "(none)") }>
+						<span class="leaderboard-row__num">{ rankNum(i + 1) }</span>
+						<span class="leaderboard-row__name">
+							if r.Project == "(none)" {
+								unknown
+							} else {
+								<a href={ templ.SafeURL("/search?project=" + r.Project) }>{ r.Project }</a>
+							}
+						</span>
+						<span class="leaderboard-row__count">{ strconv.Itoa(r.Count) }</span>
+					</div>
 				}
-			</ul>
+			</div>
 		}
 	}
+}
+
+// rankNum formats 1 → "01", 12 → "12".
+func rankNum(n int) string {
+	if n < 10 {
+		return "0" + strconv.Itoa(n)
+	}
+	return strconv.Itoa(n)
 }

@@ -5,13 +5,7 @@
 
 //
 
-// Generated counterparts (*_templ.go) are produced by `task templ` and
-
-// are committed alongside the .templ sources so `go build` works on a
-
-// fresh clone without running templ first. Re-generate after editing
-
-// any .templ file.
+// Generated counterparts (*_templ.go) are produced by `task templ`.
 
 package views
 
@@ -20,15 +14,9 @@ package views
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
-// Layout is the outer shell every page renders into. It wires Tailwind
-// (CDN play, no build step), htmx, and our small custom CSS, plus a
-// fixed header with global search and primary nav links.
-//
-// Usage:
-//
-//	@Layout("Entries") {
-//	    <h1>...</h1>
-//	}
+// Layout is the outer shell every page renders into. Two-row header:
+// (1) wordmark + nav, (2) the dominant search bar. Below the page,
+// a quiet typographic colophon footer.
 func Layout(title string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -50,28 +38,28 @@ func Layout(title string) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<!doctype html><html lang=\"en\" class=\"h-full\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<!doctype html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		var templ_7745c5c3_Var2 string
 		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(title)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 24, Col: 17}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/web/views/layout.templ`, Line: 15, Col: 17}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " · ailog</title><script src=\"https://cdn.tailwindcss.com\"></script><link rel=\"stylesheet\" href=\"/static/app.css\"><script src=\"/static/htmx.min.js\" defer></script><script>\n\t\t\t\t// Respect the system color scheme — Tailwind's `dark:` variants\n\t\t\t\t// kick in when <html> has the `dark` class.\n\t\t\t\tif (window.matchMedia('(prefers-color-scheme: dark)').matches) {\n\t\t\t\t\tdocument.documentElement.classList.add('dark');\n\t\t\t\t}\n\t\t\t</script></head><body class=\"h-full bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " · ailog</title><link rel=\"preconnect\" href=\"https://fonts.googleapis.com\"><link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin><link href=\"https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500;1,6..72,600&display=swap\" rel=\"stylesheet\"><link rel=\"stylesheet\" href=\"/static/app.css\"><script src=\"/static/htmx.min.js\" defer></script><script>\n\t\t\t\tif (window.matchMedia('(prefers-color-scheme: dark)').matches) {\n\t\t\t\t\tdocument.documentElement.classList.add('dark');\n\t\t\t\t}\n\t\t\t</script></head><body><div class=\"shell\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = header().Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = SiteHeader().Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<main class=\"mx-auto max-w-6xl px-4 py-6\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<main><div class=\"container\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -79,7 +67,15 @@ func Layout(title string) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</main></body></html>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</div></main>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = SiteFooter().Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</div></body></html>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -87,8 +83,9 @@ func Layout(title string) templ.Component {
 	})
 }
 
-// header is the persistent top bar — search box on the left, nav on the right.
-func header() templ.Component {
+// SiteHeader is the persistent top of every page. Two rows: brand + nav,
+// then a confident, italic-serif search input that dominates the header.
+func SiteHeader() templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
 		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
@@ -109,7 +106,37 @@ func header() templ.Component {
 			templ_7745c5c3_Var3 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<header class=\"border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800\"><div class=\"mx-auto max-w-6xl px-4 py-3 flex items-center gap-4\"><a href=\"/\" class=\"font-semibold text-lg tracking-tight\">ailog</a><form action=\"/search\" method=\"get\" class=\"flex-1 max-w-2xl\"><input type=\"search\" name=\"q\" placeholder=\"Search every prompt and response…\" class=\"w-full px-3 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500\" hx-get=\"/search/partial\" hx-trigger=\"input changed delay:200ms, search\" hx-target=\"#search-results\" hx-push-url=\"false\"></form><nav class=\"flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300\"><a href=\"/sessions\" class=\"hover:text-slate-900 dark:hover:text-white\">Sessions</a> <a href=\"/projects\" class=\"hover:text-slate-900 dark:hover:text-white\">Projects</a> <a href=\"/templates\" class=\"hover:text-slate-900 dark:hover:text-white\">Templates</a> <a href=\"/stats\" class=\"hover:text-slate-900 dark:hover:text-white\">Stats</a></nav></div></header>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<header class=\"site-header\"><div class=\"container\"><div class=\"site-header__row\"><a href=\"/\" class=\"wordmark\" aria-label=\"ailog — home\">ailog</a><nav class=\"site-nav\" aria-label=\"primary\"><a href=\"/sessions\">Sessions</a> <a href=\"/projects\">Projects</a> <a href=\"/templates\">Templates</a> <a href=\"/stats\">Stats</a></nav></div><form action=\"/search\" method=\"get\" role=\"search\"><label class=\"search-shell\"><svg class=\"search-icon\" viewBox=\"0 0 20 20\" fill=\"none\" aria-hidden=\"true\"><circle cx=\"9\" cy=\"9\" r=\"5.5\" stroke=\"currentColor\" stroke-width=\"1.5\"></circle> <path d=\"M13.5 13.5L17 17\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\"></path></svg> <input type=\"search\" name=\"q\" placeholder=\"Search every prompt and response…\" class=\"search-input\" autocomplete=\"off\" hx-get=\"/search/partial\" hx-trigger=\"input changed delay:200ms, search\" hx-target=\"#search-results\" hx-push-url=\"false\"> <span class=\"kbd hide-mobile\">⌘K</span></label></form></div></header>")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		return nil
+	})
+}
+
+// SiteFooter — small typographic colophon, like the back of a book.
+func SiteFooter() templ.Component {
+	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
+		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
+		if templ_7745c5c3_CtxErr := ctx.Err(); templ_7745c5c3_CtxErr != nil {
+			return templ_7745c5c3_CtxErr
+		}
+		templ_7745c5c3_Buffer, templ_7745c5c3_IsBuffer := templruntime.GetBuffer(templ_7745c5c3_W)
+		if !templ_7745c5c3_IsBuffer {
+			defer func() {
+				templ_7745c5c3_BufErr := templruntime.ReleaseBuffer(templ_7745c5c3_Buffer)
+				if templ_7745c5c3_Err == nil {
+					templ_7745c5c3_Err = templ_7745c5c3_BufErr
+				}
+			}()
+		}
+		ctx = templ.InitializeContext(ctx)
+		templ_7745c5c3_Var4 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var4 == nil {
+			templ_7745c5c3_Var4 = templ.NopComponent
+		}
+		ctx = templ.ClearChildren(ctx)
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<footer class=\"site-footer\"><div class=\"container colophon\"><span>ailog · local prompt log</span> <span>v0.2 · field notebook edition</span></div></footer>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

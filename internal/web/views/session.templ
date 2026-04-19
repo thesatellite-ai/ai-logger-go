@@ -8,14 +8,20 @@ import (
 	"github.com/khanakia/ai-logger/internal/store"
 )
 
-// Sessions is the listing page for every distinct session in the DB.
+// Sessions — listing page for every distinct session.
 templ Sessions(summaries []store.SessionSummary) {
 	@Layout("Sessions") {
-		<h1 class="text-xl font-semibold mb-4">Sessions</h1>
+		<header class="page-head">
+			<h1 class="page-head__title">All <em>sessions</em></h1>
+			<span class="page-head__sub">{ strconv.Itoa(len(summaries)) } total</span>
+		</header>
 		if len(summaries) == 0 {
-			<p class="text-sm text-slate-500 dark:text-slate-400">No sessions yet.</p>
+			<div class="empty">
+				<p class="empty__quote">&ldquo;Every conversation begins with a single prompt.&rdquo;</p>
+				<p class="empty__cite">— almost lao tzu</p>
+			</div>
 		} else {
-			<div class="space-y-2">
+			<div class="stack stack-3">
 				for _, s := range summaries {
 					@sessionCard(s)
 				}
@@ -25,96 +31,99 @@ templ Sessions(summaries []store.SessionSummary) {
 }
 
 templ sessionCard(s store.SessionSummary) {
-	<a
-		href={ templ.SafeURL("/session/" + s.SessionID) }
-		class="block rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-sm transition"
-	>
-		<div class="flex items-baseline justify-between mb-1">
-			<div class="flex items-baseline gap-3">
-				<span class="font-mono text-xs text-slate-500 dark:text-slate-400">{ shortID(s.SessionID) }</span>
-				if s.SessionName != "" {
-					<span class="font-semibold text-slate-800 dark:text-slate-200">{ s.SessionName }</span>
-				}
-			</div>
-			<span class="text-xs text-slate-500 dark:text-slate-400">{ relativeTime(s.EndedAt) }</span>
-		</div>
-		<div class="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
-			if s.Tool != "" {
-				<span class="px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200">{ s.Tool }</span>
-			}
-			if s.Project != "" {
-				<span>{ projectShort(s.Project) }</span>
-			}
+	<a href={ templ.SafeURL("/session/" + s.SessionID) } class="card">
+		<div class="meta">
+			<span class="meta__id">{ shortID(s.SessionID) }</span>
+			<span class="meta__dot">·</span>
+			<span title={ s.StartedAt.Format(time.RFC3339) }>started { relativeTime(s.StartedAt) }</span>
+			<span class="meta__dot">·</span>
 			<span>{ strconv.Itoa(s.TurnCount) } turn{ pluralS(s.TurnCount) }</span>
-			<span title={ s.StartedAt.Format(time.RFC3339) }>{ s.StartedAt.Format("Jan 2, 15:04") }</span>
+			if s.Tool != "" {
+				<span class="meta__dot">·</span>
+				<span class="chip chip--tool">{ s.Tool }</span>
+			}
 		</div>
+		if s.SessionName != "" {
+			<h2 class="card__title">{ s.SessionName }</h2>
+		} else {
+			<h2 class="card__title" style="color: var(--ink-3); font-style: italic;">untitled session</h2>
+		}
+		if s.Project != "" {
+			<div class="meta mt-3">
+				<span>{ projectShort(s.Project) }</span>
+			</div>
+		}
 	</a>
 }
 
-// SessionDetail is the threaded conversation view for a single session.
-// Editable session name, then alternating prompt/response bubbles.
+// SessionDetail — threaded conversation view.
 templ SessionDetail(sessionID string, sessionName string, entries []*ent.Entry) {
 	@Layout("Session") {
-		<header class="mb-4 border-b border-slate-200 dark:border-slate-700 pb-3">
-			<div class="font-mono text-xs text-slate-500 dark:text-slate-400 mb-1">{ sessionID }</div>
-			@SessionNameForm(sessionID, sessionName)
-		</header>
-		if len(entries) == 0 {
-			<p class="text-sm text-slate-500 dark:text-slate-400">No turns in this session.</p>
-		} else {
-			<div class="space-y-4">
-				for _, e := range entries {
-					@sessionTurn(e)
-				}
-			</div>
-		}
+		<div class="container--content">
+			<header class="page-head" style="display: block; padding-bottom: var(--space-5);">
+				<div class="article__id mb-3">{ sessionID }</div>
+				@SessionNameForm(sessionID, sessionName)
+				<div class="meta mt-4">
+					<span>{ strconv.Itoa(len(entries)) } turn{ pluralS(len(entries)) }</span>
+				</div>
+			</header>
+			if len(entries) == 0 {
+				<div class="empty">
+					<p class="empty__quote">No turns yet.</p>
+				</div>
+			} else {
+				<div class="stack stack-3">
+					for _, e := range entries {
+						@sessionTurn(e)
+					}
+				</div>
+			}
+		</div>
 	}
 }
 
-// SessionNameForm posts to /session/{id}/name and swaps itself with
-// the rendered new name. Out-of-the-box htmx — no JS.
-// Exported so the rename handler can re-render just this fragment.
+// SessionNameForm — inline editable, posts via htmx.
 templ SessionNameForm(sessionID string, name string) {
 	<form
 		hx-post={ "/session/" + sessionID + "/name" }
 		hx-swap="outerHTML"
-		class="flex items-baseline gap-2"
+		class="row"
 	>
 		<input
 			type="text"
 			name="name"
 			value={ name }
 			placeholder="Name this session…"
-			class="flex-1 max-w-md px-2 py-1 rounded border border-transparent hover:border-slate-300 dark:hover:border-slate-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-transparent text-lg font-semibold"
+			class="input-bare"
+			aria-label="session name"
 		/>
-		<button type="submit" class="text-xs px-2 py-1 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600">save</button>
+		<button type="submit" class="btn btn--sm btn--ghost">save</button>
 	</form>
 }
 
-// sessionTurn renders one entry as a paired user→assistant block.
+// sessionTurn — one prompt + (optional) response pair.
 templ sessionTurn(e *ent.Entry) {
-	<div class="space-y-2">
-		<div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3">
-			<div class="flex items-baseline justify-between mb-1">
-				<span class="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">User · turn { strconv.Itoa(e.TurnIndex) }</span>
-				<a href={ templ.SafeURL("/entry/" + e.ID) } class="text-xs text-slate-500 dark:text-slate-400 font-mono hover:underline">{ shortID(e.ID) }</a>
+	<div class="turn-block">
+		<div class="turn-block__rail turn-block__rail--user">
+			<strong>You</strong>
+			<span class="turn-block__id">turn { intStrAlways(e.TurnIndex) }</span>
+			<a href={ templ.SafeURL("/entry/" + e.ID) } class="turn-block__id">{ shortID(e.ID) }</a>
+		</div>
+		<div class="prose">
+			@templ.Raw(string(RenderMarkdown(e.Prompt)))
+		</div>
+	</div>
+	if e.Response != "" {
+		<div class="turn-block">
+			<div class="turn-block__rail">
+				<strong>Assistant</strong>
+				if e.Model != "" {
+					<span class="turn-block__model">{ e.Model }</span>
+				}
 			</div>
-			<div class="markdown text-sm">
-				@templ.Raw(string(RenderMarkdown(e.Prompt)))
+			<div class="prose body--response">
+				@templ.Raw(string(RenderMarkdown(e.Response)))
 			</div>
 		</div>
-		if e.Response != "" {
-			<div class="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/10 px-4 py-3 ml-6">
-				<div class="flex items-baseline justify-between mb-1">
-					<span class="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">Assistant</span>
-					if e.Model != "" {
-						<span class="text-xs text-slate-500 dark:text-slate-400">{ e.Model }</span>
-					}
-				</div>
-				<div class="markdown text-sm">
-					@templ.Raw(string(RenderMarkdown(e.Response)))
-				</div>
-			</div>
-		}
-	</div>
+	}
 }

@@ -45,17 +45,17 @@ func Templates(entries []*ent.Entry) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"mb-4 flex items-baseline justify-between\"><h1 class=\"text-xl font-semibold\">Templates</h1><span class=\"text-sm text-slate-500 dark:text-slate-400\">starred entries</span></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<header class=\"page-head\"><h1 class=\"page-head__title\">Starred <em>templates</em></h1><span class=\"page-head__sub\">your reusable library</span></header>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			if len(entries) == 0 {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<p class=\"text-sm text-slate-500 dark:text-slate-400\">No starred entries yet. Open any entry and click <span class=\"text-amber-500\">☆ star</span> to add it here.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<div class=\"empty\"><p class=\"empty__quote\">&ldquo;A library is not a luxury but one of the necessities of life.&rdquo;</p><p class=\"empty__cite\">— henry ward beecher</p><p class=\"empty__hint\">Open any entry and click <code>★ Star</code> to save it here.</p></div>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<div class=\"space-y-2\">")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<div class=\"stack stack-3\">")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

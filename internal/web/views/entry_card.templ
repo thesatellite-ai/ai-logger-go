@@ -8,41 +8,43 @@ import (
 	"github.com/khanakia/ai-logger/ent"
 )
 
-// EntryCard is the compact card representation of an entry shown in
-// list/search results. Click takes you to the full detail.
+// EntryCard is the entry teaser used on list, search, templates, etc.
+// Editorial layout: meta byline above, serif title, tag chips below,
+// star indicator on the right.
 templ EntryCard(e *ent.Entry) {
-	<a
-		href={ templ.SafeURL("/entry/" + e.ID) }
-		class="block rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-sm transition"
-	>
-		<div class="flex items-baseline gap-3 text-xs text-slate-500 dark:text-slate-400 mb-1.5">
-			<span class="font-mono">{ shortID(e.ID) }</span>
+	<a href={ templ.SafeURL("/entry/" + e.ID) } class="card">
+		<div class="meta">
+			<span class="meta__id">{ shortID(e.ID) }</span>
+			<span class="meta__dot">·</span>
 			<span title={ e.CreatedAt.Format(time.RFC3339) }>{ relativeTime(e.CreatedAt) }</span>
 			if e.Tool != "" {
-				<span class="px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200">{ e.Tool }</span>
+				<span class="meta__dot">·</span>
+				<span class="chip chip--tool">{ e.Tool }</span>
 			}
 			if e.Project != "" {
-				<span class="truncate">{ projectShort(e.Project) }</span>
+				<span class="meta__dot">·</span>
+				<span>{ projectShort(e.Project) }</span>
 			}
 			if e.GitBranch != "" {
-				<span class="text-slate-400">on { e.GitBranch }</span>
-			}
-			if e.Starred {
-				<span class="text-amber-500" title="Starred">★</span>
+				<span class="meta__dot">·</span>
+				<span>on { e.GitBranch }</span>
 			}
 		</div>
-		<p class="text-sm text-slate-800 dark:text-slate-200 line-clamp-2">{ truncate(e.Prompt, 220) }</p>
-		if e.Tags != "" {
-			<div class="mt-2 flex flex-wrap gap-1">
+		<h2 class="card__title">{ truncate(e.Prompt, 220) }</h2>
+		<div class="card__footer">
+			<div class="cluster">
 				for _, t := range splitTags(e.Tags) {
-					<span class="px-1.5 py-0.5 text-xs rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">{ t }</span>
+					<span class="chip">{ t }</span>
 				}
 			</div>
-		}
+			if e.Starred {
+				<span class="chip chip--star" title="Starred">★</span>
+			}
+		</div>
 	</a>
 }
 
-// shortID returns the same 13-char display prefix the CLI uses.
+// shortID returns the 13-char display prefix the CLI uses.
 func shortID(id string) string {
 	if len(id) < 13 {
 		return id
@@ -50,8 +52,7 @@ func shortID(id string) string {
 	return id[:13]
 }
 
-// projectShort drops the host portion of a canonical project string for
-// compactness in cards (github.com/khanakia/foo → khanakia/foo).
+// projectShort drops the host portion of a canonical project string.
 func projectShort(p string) string {
 	if i := strings.Index(p, "/"); i >= 0 {
 		return p[i+1:]
@@ -59,7 +60,7 @@ func projectShort(p string) string {
 	return p
 }
 
-// truncate collapses newlines and clips to n runes with an ellipsis.
+// truncate collapses newlines and clips to n chars with an ellipsis.
 func truncate(s string, n int) string {
 	s = strings.ReplaceAll(s, "\n", " ")
 	if len(s) <= n {
@@ -68,7 +69,7 @@ func truncate(s string, n int) string {
 	return s[:n-1] + "…"
 }
 
-// splitTags parses the comma-separated tags column into clean tokens.
+// splitTags parses the comma-separated tags column into tokens.
 func splitTags(csv string) []string {
 	parts := strings.Split(csv, ",")
 	out := parts[:0]
@@ -81,8 +82,7 @@ func splitTags(csv string) []string {
 	return out
 }
 
-// relativeTime renders a human-friendly duration: "5m ago", "3h ago",
-// "2d ago", "Mar 14" for older entries.
+// relativeTime renders a human-friendly duration.
 func relativeTime(t time.Time) string {
 	d := time.Since(t)
 	switch {

@@ -63,13 +63,16 @@ func TestList_RendersEntries(t *testing.T) {
 	body := getBody(t, srv.URL+"/")
 	mustContain(t, body, "fix the race condition")
 	mustContain(t, body, "claude-code")
-	mustContain(t, body, "Recent entries")
+	// New design: page heading is "Recent <em>entries</em>" — assert each piece.
+	mustContain(t, body, "Recent")
+	mustContain(t, body, "entries</em>")
 }
 
 func TestList_EmptyState(t *testing.T) {
 	srv, _ := newTestServer(t)
 	body := getBody(t, srv.URL+"/")
-	mustContain(t, body, "No entries logged yet")
+	// New empty state: a quote about ink/memory + the install hint with code chip.
+	mustContain(t, body, "ailog hooks install")
 }
 
 func TestEntryDetail_RendersMarkdown(t *testing.T) {
@@ -111,13 +114,17 @@ func TestSearch_FullPage(t *testing.T) {
 	seedEntry(t, s, store.InsertEntryInput{Prompt: "race condition in worker"})
 	body := getBody(t, srv.URL+"/search?q=race")
 	mustContain(t, body, "race condition")
-	mustContain(t, body, "1 match")
+	// New design renders the meta strip with the count and label in
+	// separate spans: <span>1</span> <span>match</span>.
+	mustContain(t, body, ">1</span>")
+	mustContain(t, body, ">match</span>")
 }
 
 func TestSearch_EmptyQueryShowsHint(t *testing.T) {
 	srv, _ := newTestServer(t)
 	body := getBody(t, srv.URL+"/search")
-	mustContain(t, body, "Type to search")
+	// New empty state: a Rumi quote + the FTS5 syntax hint.
+	mustContain(t, body, "FTS5 syntax")
 }
 
 func TestSearchPartial_LayoutLess(t *testing.T) {
@@ -134,9 +141,11 @@ func TestStarToggle_FlipsAndPersists(t *testing.T) {
 	srv, s := newTestServer(t)
 	id := seedEntry(t, s, store.InsertEntryInput{Prompt: "p"})
 
-	// Initially unstarred → click star.
+	// Initially unstarred → click star. New UI uses "★" + "Starred" in the
+	// pill button, with the glyph and label in separate <span>s.
 	body := postForm(t, srv.URL+"/entry/"+id+"/star", nil)
-	mustContain(t, body, "★ starred")
+	mustContain(t, body, "star-toggle--on")
+	mustContain(t, body, "Starred")
 
 	e, _ := s.GetByID(context.Background(), id)
 	if !e.Starred {
@@ -145,7 +154,10 @@ func TestStarToggle_FlipsAndPersists(t *testing.T) {
 
 	// Click again → unstar.
 	body = postForm(t, srv.URL+"/entry/"+id+"/star", nil)
-	mustContain(t, body, "☆ star")
+	if strings.Contains(body, "star-toggle--on") {
+		t.Fatal("expected unstarred state, still has star-toggle--on")
+	}
+	mustContain(t, body, "☆")
 
 	e, _ = s.GetByID(context.Background(), id)
 	if e.Starred {
@@ -212,7 +224,7 @@ func TestSessionRename_UpdatesAndRenders(t *testing.T) {
 	_ = e // session-name is updated on every entry; verify via SessionEntries
 }
 
-func TestStats_RendersCountsAndBars(t *testing.T) {
+func TestStats_RendersCountsAndDots(t *testing.T) {
 	srv, s := newTestServer(t)
 	seedEntry(t, s, store.InsertEntryInput{Prompt: "a", Tool: "claude-code"})
 	seedEntry(t, s, store.InsertEntryInput{Prompt: "b", Tool: "cursor"})
@@ -222,8 +234,9 @@ func TestStats_RendersCountsAndBars(t *testing.T) {
 	mustContain(t, body, "By project")
 	mustContain(t, body, "claude-code")
 	mustContain(t, body, "cursor")
-	if !strings.Contains(body, `style="width:`) {
-		t.Fatal("expected bar widths in stats page")
+	// New design uses 10-cell dot-bars (●○) instead of CSS-width bars.
+	if !strings.Contains(body, "●") || !strings.Contains(body, "○") {
+		t.Fatal("expected dot-bar viz in stats page (●/○)")
 	}
 }
 

@@ -8,64 +8,82 @@ import (
 	"github.com/khanakia/ai-logger/internal/store"
 )
 
-// Stats renders the dashboard with totals, distinct sessions, top
-// tools/projects, and timestamp range. HTML-only bar charts — no
-// charting library.
+// Stats — the data sheet. Top: hero numbers. Middle: ranked tables
+// with dot-grid mini-vis. Bottom: time range strip.
 templ Stats(s store.Stats) {
 	@Layout("Stats") {
-		<h1 class="text-xl font-semibold mb-4">Stats</h1>
-		<div class="grid gap-4 md:grid-cols-2 mb-6">
-			@statBox("Total entries", strconv.Itoa(s.Total))
-			@statBox("Starred", strconv.Itoa(s.Starred))
-			@statBox("Distinct sessions", strconv.Itoa(s.BySession))
-			@statBox("First entry", formatTimePtr(s.FirstEntryAt))
+		<header class="page-head">
+			<h1 class="page-head__title">The <em>data sheet</em></h1>
+			<span class="page-head__sub">computed live</span>
+		</header>
+		<section class="stat-grid">
+			@statCard(strconv.Itoa(s.Total), "Total entries")
+			@statCard(strconv.Itoa(s.BySession), "Distinct sessions")
+			@statCard(strconv.Itoa(s.Starred), "Starred")
+			@statCard(spanLabel(s.FirstEntryAt, s.LastEntryAt), "Span")
+		</section>
+		<div class="stack stack-5">
+			<div class="data-sheet">
+				<div class="data-sheet__heading">By tool</div>
+				@rankList(s.ByTool, s.Total)
+			</div>
+			<div class="data-sheet">
+				<div class="data-sheet__heading">By project</div>
+				@rankList(s.ByProject, s.Total)
+			</div>
 		</div>
-		<div class="grid gap-6 md:grid-cols-2">
+		<dl class="stat-range">
 			<div>
-				<h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">By tool</h2>
-				@bars(s.ByTool, s.Total)
+				<dt>First entry</dt>
+				<dd>{ formatTimePtr(s.FirstEntryAt) }</dd>
 			</div>
 			<div>
-				<h2 class="text-sm font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-2">By project</h2>
-				@bars(s.ByProject, s.Total)
+				<dt>Last entry</dt>
+				<dd>{ formatTimePtr(s.LastEntryAt) }</dd>
 			</div>
+		</dl>
+	}
+}
+
+templ statCard(value string, label string) {
+	<div class="stat-card">
+		<div class="stat-card__value">{ value }</div>
+		<div class="stat-card__label">{ label }</div>
+	</div>
+}
+
+templ rankList(m map[string]int, total int) {
+	for i, kv := range sortByCount(m) {
+		<div class="rank-row">
+			<span class="rank-row__num">{ rankNum(i + 1) }</span>
+			<span class="rank-row__label">{ kv.K }</span>
+			<span class="rank-row__count">{ strconv.Itoa(kv.V) }</span>
+			<span class="rank-row__viz" aria-hidden="true">
+				@dotBar(kv.V, total)
+			</span>
 		</div>
 	}
 }
 
-templ statBox(label string, value string) {
-	<div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3">
-		<div class="text-xs text-slate-500 dark:text-slate-400">{ label }</div>
-		<div class="text-2xl font-semibold mt-1">{ value }</div>
-	</div>
-}
-
-// bars is a sorted-desc bar chart rendered as nested divs. Each row
-// shows label, count, and a width-proportional fill.
-templ bars(m map[string]int, total int) {
-	<ul class="space-y-1">
-		for _, kv := range sortByCount(m) {
-			<li>
-				<div class="flex items-baseline justify-between text-xs mb-0.5">
-					<span class="truncate text-slate-700 dark:text-slate-200">{ kv.K }</span>
-					<span class="text-slate-500 dark:text-slate-400 ml-2">{ strconv.Itoa(kv.V) }</span>
-				</div>
-				<div class="h-1.5 rounded bg-slate-100 dark:bg-slate-700 overflow-hidden">
-					<div class="h-full bg-blue-500" style={ "width:" + percent(kv.V, total) }></div>
-				</div>
-			</li>
+// dotBar renders a 10-cell dot row representing a fraction.
+templ dotBar(v, total int) {
+	{{ filled := dotCount(v, total) }}
+	for i := 0; i < 10; i++ {
+		if i < filled {
+			<span class="on">●</span>
+		} else {
+			<span>○</span>
 		}
-	</ul>
+	}
 }
 
-// barRow is one (label, count) pair used by the bar chart.
+// barRow is one (label, count) pair used by the bar chart sorter.
 type barRow struct {
 	K string
 	V int
 }
 
-// sortByCount returns the map sorted descending by value, alphabetic
-// tiebreak. Used to render bar charts.
+// sortByCount returns the map sorted descending by value, alphabetic tiebreak.
 func sortByCount(m map[string]int) []barRow {
 	out := make([]barRow, 0, len(m))
 	for k, v := range m {
@@ -80,20 +98,38 @@ func sortByCount(m map[string]int) []barRow {
 	return out
 }
 
-// percent returns the bar width as a "<n>%" string. Defends against
-// zero total so we don't emit NaN%.
-func percent(v, total int) string {
-	if total == 0 {
-		return "0%"
+// dotCount maps (count, total) → 0..10 filled dots.
+// Always returns >=1 if v > 0 so "tiny but present" rows stay visible.
+func dotCount(v, total int) int {
+	if total == 0 || v == 0 {
+		return 0
 	}
-	return strconv.Itoa((v*100)/total) + "%"
+	n := (v * 10) / total
+	if n == 0 {
+		return 1
+	}
+	if n > 10 {
+		return 10
+	}
+	return n
 }
 
-// formatTimePtr renders an optional time.Time as a short stamp, or an
-// em-dash if nil (used by the stat boxes).
+// spanLabel renders the gap between first and last entry as "73 d".
+func spanLabel(a, b *time.Time) string {
+	if a == nil || b == nil {
+		return "—"
+	}
+	d := int(b.Sub(*a).Hours() / 24)
+	if d < 1 {
+		return "today"
+	}
+	return strconv.Itoa(d) + " d"
+}
+
+// formatTimePtr renders an optional time.Time as a short stamp, em-dash if nil.
 func formatTimePtr(t *time.Time) string {
 	if t == nil {
 		return "—"
 	}
-	return t.Local().Format("2006-01-02 15:04")
+	return t.Local().Format("2006-01-02 15:04 MST")
 }
