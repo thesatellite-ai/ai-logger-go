@@ -38,13 +38,13 @@ templ Search(query string, entries []*ent.Entry) {
 // both call sites keeps the layout identical whether the page reloaded
 // or hot-swapped.
 templ SearchResults(query string, entries []*ent.Entry) {
-	if query == "" {
-		@searchHint()
+	if len(entries) > 0 {
+		@searchHits(query, entries)
 	} else {
-		if len(entries) == 0 {
-			@searchEmpty(query)
+		if query == "" {
+			@searchHint()
 		} else {
-			@searchHits(query, entries)
+			@searchEmpty(query)
 		}
 	}
 }
@@ -63,7 +63,11 @@ templ searchEmpty(query string) {
 
 templ searchHits(query string, entries []*ent.Entry) {
 	<p class="text-sm text-slate-500 dark:text-slate-400 mb-3">
-		{ strconv.Itoa(len(entries)) } match{ pluralES(len(entries)) } { "for" } <span class="font-mono">{ query }</span>
+		if query != "" {
+			{ strconv.Itoa(len(entries)) } match{ pluralES(len(entries)) } { "for" } <span class="font-mono">{ query }</span>
+		} else {
+			{ strconv.Itoa(len(entries)) } entr{ entrySuffix(len(entries)) }
+		}
 	</p>
 	<div class="space-y-2">
 		for _, e := range entries {

@@ -21,15 +21,22 @@ type SearchFilter struct {
 // supplied filter. The two-step (FTS first, then ent narrow) keeps us
 // off-chart with FTS5 column constraints and lets us reuse ent's
 // generated predicates for the structured fields.
+//
+// When query is empty, the FTS5 step is skipped and only the structured
+// filters apply — useful for "show me everything in project X" links
+// from the projects / sessions pages.
 func (s *Store) Search(ctx context.Context, query string, f SearchFilter) ([]*Entry, error) {
-	ids, err := ftsSearch(ctx, s.db, query, f.Limit)
-	if err != nil {
-		return nil, err
+	q := s.client.Entry.Query()
+	if query != "" {
+		ids, err := ftsSearch(ctx, s.db, query, f.Limit)
+		if err != nil {
+			return nil, err
+		}
+		if len(ids) == 0 {
+			return nil, nil
+		}
+		q = q.Where(entry.IDIn(ids...))
 	}
-	if len(ids) == 0 {
-		return nil, nil
-	}
-	q := s.client.Entry.Query().Where(entry.IDIn(ids...))
 	if f.Project != "" {
 		q = q.Where(entry.ProjectEQ(f.Project))
 	}
@@ -42,7 +49,11 @@ func (s *Store) Search(ctx context.Context, query string, f SearchFilter) ([]*En
 	if f.Branch != "" {
 		q = q.Where(entry.GitBranchEQ(f.Branch))
 	}
-	return q.Order(ent.Desc(entry.FieldCreatedAt)).All(ctx)
+	q = q.Order(ent.Desc(entry.FieldCreatedAt))
+	if f.Limit > 0 {
+		q = q.Limit(f.Limit)
+	}
+	return q.All(ctx)
 }
 
 // GetByID returns an entry by exact id. CLI prefix resolution should

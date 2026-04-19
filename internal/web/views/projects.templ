@@ -19,7 +19,11 @@ templ Projects(rows []ProjectRow) {
 			<ul class="space-y-1">
 				for _, r := range rows {
 					<li class="flex items-center justify-between rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2">
-						<a href={ templ.SafeURL("/search?q=*&project=" + r.Project) } class="font-mono text-sm text-blue-600 dark:text-blue-400 hover:underline truncate">{ r.Project }</a>
+						if r.Project == "(none)" {
+							<span class="font-mono text-sm text-slate-500 dark:text-slate-400 truncate" title="entries with no detected project">{ r.Project }</span>
+						} else {
+							<a href={ templ.SafeURL("/search?project=" + r.Project) } class="font-mono text-sm text-blue-600 dark:text-blue-400 hover:underline truncate">{ r.Project }</a>
+						}
 						<span class="text-xs text-slate-500 dark:text-slate-400 ml-3">{ strconv.Itoa(r.Count) }</span>
 					</li>
 				}
