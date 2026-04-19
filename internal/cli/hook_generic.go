@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/khanakia/ai-logger/internal/store"
 	"github.com/spf13/cobra"
 )
 
@@ -49,12 +50,14 @@ func newGenericHookCmd() *cobra.Command {
 				tool, p.SessionID, len(p.Prompt), len(p.Response)))
 
 			if p.Prompt != "" {
-				if err := capturePrompt(cmd.Context(), tool, p.SessionID, p.CWD, p.Prompt, ""); err != nil {
+				if err := capturePrompt(cmd.Context(), promptCapture{
+					Tool: tool, SessionID: p.SessionID, CWD: p.CWD, Prompt: p.Prompt,
+				}); err != nil {
 					return err
 				}
 			}
 			if p.Response != "" && p.SessionID != "" {
-				return attachResponse(cmd.Context(), p.SessionID, p.Response, p.Model)
+				return attachResponse(cmd.Context(), p.SessionID, p.Response, p.Model, store.AttachResponseInput{})
 			}
 			return nil
 		},

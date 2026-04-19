@@ -20,116 +20,136 @@ func init() {
 	entryDescTool := entryFields[1].Descriptor()
 	// entry.DefaultTool holds the default value on creation for the tool field.
 	entry.DefaultTool = entryDescTool.Default.(string)
+	// entryDescToolVersion is the schema descriptor for tool_version field.
+	entryDescToolVersion := entryFields[2].Descriptor()
+	// entry.DefaultToolVersion holds the default value on creation for the tool_version field.
+	entry.DefaultToolVersion = entryDescToolVersion.Default.(string)
 	// entryDescCwd is the schema descriptor for cwd field.
-	entryDescCwd := entryFields[2].Descriptor()
+	entryDescCwd := entryFields[3].Descriptor()
 	// entry.DefaultCwd holds the default value on creation for the cwd field.
 	entry.DefaultCwd = entryDescCwd.Default.(string)
 	// entryDescProject is the schema descriptor for project field.
-	entryDescProject := entryFields[3].Descriptor()
+	entryDescProject := entryFields[4].Descriptor()
 	// entry.DefaultProject holds the default value on creation for the project field.
 	entry.DefaultProject = entryDescProject.Default.(string)
 	// entryDescRepoOwner is the schema descriptor for repo_owner field.
-	entryDescRepoOwner := entryFields[4].Descriptor()
+	entryDescRepoOwner := entryFields[5].Descriptor()
 	// entry.DefaultRepoOwner holds the default value on creation for the repo_owner field.
 	entry.DefaultRepoOwner = entryDescRepoOwner.Default.(string)
 	// entryDescRepoName is the schema descriptor for repo_name field.
-	entryDescRepoName := entryFields[5].Descriptor()
+	entryDescRepoName := entryFields[6].Descriptor()
 	// entry.DefaultRepoName holds the default value on creation for the repo_name field.
 	entry.DefaultRepoName = entryDescRepoName.Default.(string)
 	// entryDescRepoRemote is the schema descriptor for repo_remote field.
-	entryDescRepoRemote := entryFields[6].Descriptor()
+	entryDescRepoRemote := entryFields[7].Descriptor()
 	// entry.DefaultRepoRemote holds the default value on creation for the repo_remote field.
 	entry.DefaultRepoRemote = entryDescRepoRemote.Default.(string)
 	// entryDescGitBranch is the schema descriptor for git_branch field.
-	entryDescGitBranch := entryFields[7].Descriptor()
+	entryDescGitBranch := entryFields[8].Descriptor()
 	// entry.DefaultGitBranch holds the default value on creation for the git_branch field.
 	entry.DefaultGitBranch = entryDescGitBranch.Default.(string)
 	// entryDescGitCommit is the schema descriptor for git_commit field.
-	entryDescGitCommit := entryFields[8].Descriptor()
+	entryDescGitCommit := entryFields[9].Descriptor()
 	// entry.DefaultGitCommit holds the default value on creation for the git_commit field.
 	entry.DefaultGitCommit = entryDescGitCommit.Default.(string)
 	// entryDescSessionID is the schema descriptor for session_id field.
-	entryDescSessionID := entryFields[9].Descriptor()
+	entryDescSessionID := entryFields[10].Descriptor()
 	// entry.DefaultSessionID holds the default value on creation for the session_id field.
 	entry.DefaultSessionID = entryDescSessionID.Default.(string)
 	// entryDescSessionName is the schema descriptor for session_name field.
-	entryDescSessionName := entryFields[10].Descriptor()
+	entryDescSessionName := entryFields[11].Descriptor()
 	// entry.DefaultSessionName holds the default value on creation for the session_name field.
 	entry.DefaultSessionName = entryDescSessionName.Default.(string)
 	// entryDescTurnIndex is the schema descriptor for turn_index field.
-	entryDescTurnIndex := entryFields[11].Descriptor()
+	entryDescTurnIndex := entryFields[12].Descriptor()
 	// entry.DefaultTurnIndex holds the default value on creation for the turn_index field.
 	entry.DefaultTurnIndex = entryDescTurnIndex.Default.(int)
 	// entryDescParentEntryID is the schema descriptor for parent_entry_id field.
-	entryDescParentEntryID := entryFields[12].Descriptor()
+	entryDescParentEntryID := entryFields[13].Descriptor()
 	// entry.DefaultParentEntryID holds the default value on creation for the parent_entry_id field.
 	entry.DefaultParentEntryID = entryDescParentEntryID.Default.(string)
 	// entryDescHostname is the schema descriptor for hostname field.
-	entryDescHostname := entryFields[13].Descriptor()
+	entryDescHostname := entryFields[14].Descriptor()
 	// entry.DefaultHostname holds the default value on creation for the hostname field.
 	entry.DefaultHostname = entryDescHostname.Default.(string)
 	// entryDescUser is the schema descriptor for user field.
-	entryDescUser := entryFields[14].Descriptor()
+	entryDescUser := entryFields[15].Descriptor()
 	// entry.DefaultUser holds the default value on creation for the user field.
 	entry.DefaultUser = entryDescUser.Default.(string)
 	// entryDescShell is the schema descriptor for shell field.
-	entryDescShell := entryFields[15].Descriptor()
+	entryDescShell := entryFields[16].Descriptor()
 	// entry.DefaultShell holds the default value on creation for the shell field.
 	entry.DefaultShell = entryDescShell.Default.(string)
 	// entryDescTerminal is the schema descriptor for terminal field.
-	entryDescTerminal := entryFields[16].Descriptor()
+	entryDescTerminal := entryFields[17].Descriptor()
 	// entry.DefaultTerminal holds the default value on creation for the terminal field.
 	entry.DefaultTerminal = entryDescTerminal.Default.(string)
 	// entryDescTerminalTitle is the schema descriptor for terminal_title field.
-	entryDescTerminalTitle := entryFields[17].Descriptor()
+	entryDescTerminalTitle := entryFields[18].Descriptor()
 	// entry.DefaultTerminalTitle holds the default value on creation for the terminal_title field.
 	entry.DefaultTerminalTitle = entryDescTerminalTitle.Default.(string)
 	// entryDescTty is the schema descriptor for tty field.
-	entryDescTty := entryFields[18].Descriptor()
+	entryDescTty := entryFields[19].Descriptor()
 	// entry.DefaultTty holds the default value on creation for the tty field.
 	entry.DefaultTty = entryDescTty.Default.(string)
 	// entryDescPid is the schema descriptor for pid field.
-	entryDescPid := entryFields[19].Descriptor()
+	entryDescPid := entryFields[20].Descriptor()
 	// entry.DefaultPid holds the default value on creation for the pid field.
 	entry.DefaultPid = entryDescPid.Default.(int)
 	// entryDescPrompt is the schema descriptor for prompt field.
-	entryDescPrompt := entryFields[20].Descriptor()
+	entryDescPrompt := entryFields[21].Descriptor()
 	// entry.DefaultPrompt holds the default value on creation for the prompt field.
 	entry.DefaultPrompt = entryDescPrompt.Default.(string)
 	// entryDescResponse is the schema descriptor for response field.
-	entryDescResponse := entryFields[21].Descriptor()
+	entryDescResponse := entryFields[22].Descriptor()
 	// entry.DefaultResponse holds the default value on creation for the response field.
 	entry.DefaultResponse = entryDescResponse.Default.(string)
 	// entryDescModel is the schema descriptor for model field.
-	entryDescModel := entryFields[22].Descriptor()
+	entryDescModel := entryFields[23].Descriptor()
 	// entry.DefaultModel holds the default value on creation for the model field.
 	entry.DefaultModel = entryDescModel.Default.(string)
 	// entryDescRaw is the schema descriptor for raw field.
-	entryDescRaw := entryFields[23].Descriptor()
+	entryDescRaw := entryFields[24].Descriptor()
 	// entry.DefaultRaw holds the default value on creation for the raw field.
 	entry.DefaultRaw = entryDescRaw.Default.(string)
 	// entryDescTokenCountIn is the schema descriptor for token_count_in field.
-	entryDescTokenCountIn := entryFields[24].Descriptor()
+	entryDescTokenCountIn := entryFields[25].Descriptor()
 	// entry.DefaultTokenCountIn holds the default value on creation for the token_count_in field.
 	entry.DefaultTokenCountIn = entryDescTokenCountIn.Default.(int)
 	// entryDescTokenCountOut is the schema descriptor for token_count_out field.
-	entryDescTokenCountOut := entryFields[25].Descriptor()
+	entryDescTokenCountOut := entryFields[26].Descriptor()
 	// entry.DefaultTokenCountOut holds the default value on creation for the token_count_out field.
 	entry.DefaultTokenCountOut = entryDescTokenCountOut.Default.(int)
+	// entryDescTokenCountCacheRead is the schema descriptor for token_count_cache_read field.
+	entryDescTokenCountCacheRead := entryFields[27].Descriptor()
+	// entry.DefaultTokenCountCacheRead holds the default value on creation for the token_count_cache_read field.
+	entry.DefaultTokenCountCacheRead = entryDescTokenCountCacheRead.Default.(int)
+	// entryDescTokenCountCacheCreate is the schema descriptor for token_count_cache_create field.
+	entryDescTokenCountCacheCreate := entryFields[28].Descriptor()
+	// entry.DefaultTokenCountCacheCreate holds the default value on creation for the token_count_cache_create field.
+	entry.DefaultTokenCountCacheCreate = entryDescTokenCountCacheCreate.Default.(int)
+	// entryDescStopReason is the schema descriptor for stop_reason field.
+	entryDescStopReason := entryFields[29].Descriptor()
+	// entry.DefaultStopReason holds the default value on creation for the stop_reason field.
+	entry.DefaultStopReason = entryDescStopReason.Default.(string)
+	// entryDescPermissionMode is the schema descriptor for permission_mode field.
+	entryDescPermissionMode := entryFields[30].Descriptor()
+	// entry.DefaultPermissionMode holds the default value on creation for the permission_mode field.
+	entry.DefaultPermissionMode = entryDescPermissionMode.Default.(string)
 	// entryDescTags is the schema descriptor for tags field.
-	entryDescTags := entryFields[26].Descriptor()
+	entryDescTags := entryFields[31].Descriptor()
 	// entry.DefaultTags holds the default value on creation for the tags field.
 	entry.DefaultTags = entryDescTags.Default.(string)
 	// entryDescStarred is the schema descriptor for starred field.
-	entryDescStarred := entryFields[27].Descriptor()
+	entryDescStarred := entryFields[32].Descriptor()
 	// entry.DefaultStarred holds the default value on creation for the starred field.
 	entry.DefaultStarred = entryDescStarred.Default.(bool)
 	// entryDescNotes is the schema descriptor for notes field.
-	entryDescNotes := entryFields[28].Descriptor()
+	entryDescNotes := entryFields[33].Descriptor()
 	// entry.DefaultNotes holds the default value on creation for the notes field.
 	entry.DefaultNotes = entryDescNotes.Default.(string)
 	// entryDescCreatedAt is the schema descriptor for created_at field.
-	entryDescCreatedAt := entryFields[29].Descriptor()
+	entryDescCreatedAt := entryFields[34].Descriptor()
 	// entry.DefaultCreatedAt holds the default value on creation for the created_at field.
 	entry.DefaultCreatedAt = entryDescCreatedAt.Default.(func() time.Time)
 	// entryDescID is the schema descriptor for id field.

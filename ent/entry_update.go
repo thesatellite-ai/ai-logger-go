@@ -41,6 +41,20 @@ func (_u *EntryUpdate) SetNillableTool(v *string) *EntryUpdate {
 	return _u
 }
 
+// SetToolVersion sets the "tool_version" field.
+func (_u *EntryUpdate) SetToolVersion(v string) *EntryUpdate {
+	_u.mutation.SetToolVersion(v)
+	return _u
+}
+
+// SetNillableToolVersion sets the "tool_version" field if the given value is not nil.
+func (_u *EntryUpdate) SetNillableToolVersion(v *string) *EntryUpdate {
+	if v != nil {
+		_u.SetToolVersion(*v)
+	}
+	return _u
+}
+
 // SetCwd sets the "cwd" field.
 func (_u *EntryUpdate) SetCwd(v string) *EntryUpdate {
 	_u.mutation.SetCwd(v)
@@ -405,6 +419,76 @@ func (_u *EntryUpdate) AddTokenCountOut(v int) *EntryUpdate {
 	return _u
 }
 
+// SetTokenCountCacheRead sets the "token_count_cache_read" field.
+func (_u *EntryUpdate) SetTokenCountCacheRead(v int) *EntryUpdate {
+	_u.mutation.ResetTokenCountCacheRead()
+	_u.mutation.SetTokenCountCacheRead(v)
+	return _u
+}
+
+// SetNillableTokenCountCacheRead sets the "token_count_cache_read" field if the given value is not nil.
+func (_u *EntryUpdate) SetNillableTokenCountCacheRead(v *int) *EntryUpdate {
+	if v != nil {
+		_u.SetTokenCountCacheRead(*v)
+	}
+	return _u
+}
+
+// AddTokenCountCacheRead adds value to the "token_count_cache_read" field.
+func (_u *EntryUpdate) AddTokenCountCacheRead(v int) *EntryUpdate {
+	_u.mutation.AddTokenCountCacheRead(v)
+	return _u
+}
+
+// SetTokenCountCacheCreate sets the "token_count_cache_create" field.
+func (_u *EntryUpdate) SetTokenCountCacheCreate(v int) *EntryUpdate {
+	_u.mutation.ResetTokenCountCacheCreate()
+	_u.mutation.SetTokenCountCacheCreate(v)
+	return _u
+}
+
+// SetNillableTokenCountCacheCreate sets the "token_count_cache_create" field if the given value is not nil.
+func (_u *EntryUpdate) SetNillableTokenCountCacheCreate(v *int) *EntryUpdate {
+	if v != nil {
+		_u.SetTokenCountCacheCreate(*v)
+	}
+	return _u
+}
+
+// AddTokenCountCacheCreate adds value to the "token_count_cache_create" field.
+func (_u *EntryUpdate) AddTokenCountCacheCreate(v int) *EntryUpdate {
+	_u.mutation.AddTokenCountCacheCreate(v)
+	return _u
+}
+
+// SetStopReason sets the "stop_reason" field.
+func (_u *EntryUpdate) SetStopReason(v string) *EntryUpdate {
+	_u.mutation.SetStopReason(v)
+	return _u
+}
+
+// SetNillableStopReason sets the "stop_reason" field if the given value is not nil.
+func (_u *EntryUpdate) SetNillableStopReason(v *string) *EntryUpdate {
+	if v != nil {
+		_u.SetStopReason(*v)
+	}
+	return _u
+}
+
+// SetPermissionMode sets the "permission_mode" field.
+func (_u *EntryUpdate) SetPermissionMode(v string) *EntryUpdate {
+	_u.mutation.SetPermissionMode(v)
+	return _u
+}
+
+// SetNillablePermissionMode sets the "permission_mode" field if the given value is not nil.
+func (_u *EntryUpdate) SetNillablePermissionMode(v *string) *EntryUpdate {
+	if v != nil {
+		_u.SetPermissionMode(*v)
+	}
+	return _u
+}
+
 // SetTags sets the "tags" field.
 func (_u *EntryUpdate) SetTags(v string) *EntryUpdate {
 	_u.mutation.SetTags(v)
@@ -491,6 +575,9 @@ func (_u *EntryUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.Tool(); ok {
 		_spec.SetField(entry.FieldTool, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.ToolVersion(); ok {
+		_spec.SetField(entry.FieldToolVersion, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.Cwd(); ok {
 		_spec.SetField(entry.FieldCwd, field.TypeString, value)
 	}
@@ -575,6 +662,24 @@ func (_u *EntryUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.AddedTokenCountOut(); ok {
 		_spec.AddField(entry.FieldTokenCountOut, field.TypeInt, value)
 	}
+	if value, ok := _u.mutation.TokenCountCacheRead(); ok {
+		_spec.SetField(entry.FieldTokenCountCacheRead, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedTokenCountCacheRead(); ok {
+		_spec.AddField(entry.FieldTokenCountCacheRead, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.TokenCountCacheCreate(); ok {
+		_spec.SetField(entry.FieldTokenCountCacheCreate, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedTokenCountCacheCreate(); ok {
+		_spec.AddField(entry.FieldTokenCountCacheCreate, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.StopReason(); ok {
+		_spec.SetField(entry.FieldStopReason, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PermissionMode(); ok {
+		_spec.SetField(entry.FieldPermissionMode, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.Tags(); ok {
 		_spec.SetField(entry.FieldTags, field.TypeString, value)
 	}
@@ -614,6 +719,20 @@ func (_u *EntryUpdateOne) SetTool(v string) *EntryUpdateOne {
 func (_u *EntryUpdateOne) SetNillableTool(v *string) *EntryUpdateOne {
 	if v != nil {
 		_u.SetTool(*v)
+	}
+	return _u
+}
+
+// SetToolVersion sets the "tool_version" field.
+func (_u *EntryUpdateOne) SetToolVersion(v string) *EntryUpdateOne {
+	_u.mutation.SetToolVersion(v)
+	return _u
+}
+
+// SetNillableToolVersion sets the "tool_version" field if the given value is not nil.
+func (_u *EntryUpdateOne) SetNillableToolVersion(v *string) *EntryUpdateOne {
+	if v != nil {
+		_u.SetToolVersion(*v)
 	}
 	return _u
 }
@@ -982,6 +1101,76 @@ func (_u *EntryUpdateOne) AddTokenCountOut(v int) *EntryUpdateOne {
 	return _u
 }
 
+// SetTokenCountCacheRead sets the "token_count_cache_read" field.
+func (_u *EntryUpdateOne) SetTokenCountCacheRead(v int) *EntryUpdateOne {
+	_u.mutation.ResetTokenCountCacheRead()
+	_u.mutation.SetTokenCountCacheRead(v)
+	return _u
+}
+
+// SetNillableTokenCountCacheRead sets the "token_count_cache_read" field if the given value is not nil.
+func (_u *EntryUpdateOne) SetNillableTokenCountCacheRead(v *int) *EntryUpdateOne {
+	if v != nil {
+		_u.SetTokenCountCacheRead(*v)
+	}
+	return _u
+}
+
+// AddTokenCountCacheRead adds value to the "token_count_cache_read" field.
+func (_u *EntryUpdateOne) AddTokenCountCacheRead(v int) *EntryUpdateOne {
+	_u.mutation.AddTokenCountCacheRead(v)
+	return _u
+}
+
+// SetTokenCountCacheCreate sets the "token_count_cache_create" field.
+func (_u *EntryUpdateOne) SetTokenCountCacheCreate(v int) *EntryUpdateOne {
+	_u.mutation.ResetTokenCountCacheCreate()
+	_u.mutation.SetTokenCountCacheCreate(v)
+	return _u
+}
+
+// SetNillableTokenCountCacheCreate sets the "token_count_cache_create" field if the given value is not nil.
+func (_u *EntryUpdateOne) SetNillableTokenCountCacheCreate(v *int) *EntryUpdateOne {
+	if v != nil {
+		_u.SetTokenCountCacheCreate(*v)
+	}
+	return _u
+}
+
+// AddTokenCountCacheCreate adds value to the "token_count_cache_create" field.
+func (_u *EntryUpdateOne) AddTokenCountCacheCreate(v int) *EntryUpdateOne {
+	_u.mutation.AddTokenCountCacheCreate(v)
+	return _u
+}
+
+// SetStopReason sets the "stop_reason" field.
+func (_u *EntryUpdateOne) SetStopReason(v string) *EntryUpdateOne {
+	_u.mutation.SetStopReason(v)
+	return _u
+}
+
+// SetNillableStopReason sets the "stop_reason" field if the given value is not nil.
+func (_u *EntryUpdateOne) SetNillableStopReason(v *string) *EntryUpdateOne {
+	if v != nil {
+		_u.SetStopReason(*v)
+	}
+	return _u
+}
+
+// SetPermissionMode sets the "permission_mode" field.
+func (_u *EntryUpdateOne) SetPermissionMode(v string) *EntryUpdateOne {
+	_u.mutation.SetPermissionMode(v)
+	return _u
+}
+
+// SetNillablePermissionMode sets the "permission_mode" field if the given value is not nil.
+func (_u *EntryUpdateOne) SetNillablePermissionMode(v *string) *EntryUpdateOne {
+	if v != nil {
+		_u.SetPermissionMode(*v)
+	}
+	return _u
+}
+
 // SetTags sets the "tags" field.
 func (_u *EntryUpdateOne) SetTags(v string) *EntryUpdateOne {
 	_u.mutation.SetTags(v)
@@ -1098,6 +1287,9 @@ func (_u *EntryUpdateOne) sqlSave(ctx context.Context) (_node *Entry, err error)
 	if value, ok := _u.mutation.Tool(); ok {
 		_spec.SetField(entry.FieldTool, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.ToolVersion(); ok {
+		_spec.SetField(entry.FieldToolVersion, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.Cwd(); ok {
 		_spec.SetField(entry.FieldCwd, field.TypeString, value)
 	}
@@ -1181,6 +1373,24 @@ func (_u *EntryUpdateOne) sqlSave(ctx context.Context) (_node *Entry, err error)
 	}
 	if value, ok := _u.mutation.AddedTokenCountOut(); ok {
 		_spec.AddField(entry.FieldTokenCountOut, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.TokenCountCacheRead(); ok {
+		_spec.SetField(entry.FieldTokenCountCacheRead, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedTokenCountCacheRead(); ok {
+		_spec.AddField(entry.FieldTokenCountCacheRead, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.TokenCountCacheCreate(); ok {
+		_spec.SetField(entry.FieldTokenCountCacheCreate, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedTokenCountCacheCreate(); ok {
+		_spec.AddField(entry.FieldTokenCountCacheCreate, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.StopReason(); ok {
+		_spec.SetField(entry.FieldStopReason, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PermissionMode(); ok {
+		_spec.SetField(entry.FieldPermissionMode, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.Tags(); ok {
 		_spec.SetField(entry.FieldTags, field.TypeString, value)

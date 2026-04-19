@@ -99,7 +99,17 @@ templ entryColophon(e *ent.Entry) {
 			@kv("Shell", e.Shell)
 			@kv("Terminal", e.Terminal)
 			@kv("Process", intStr(e.Pid))
-			@kv("Tokens", intPair(e.TokenCountIn, e.TokenCountOut))
+			@kv("Tool version", e.ToolVersion)
+			@kv("Permission mode", e.PermissionMode)
+			@kv("Stop reason", e.StopReason)
+			if e.TokenCountIn > 0 || e.TokenCountOut > 0 {
+				<dt>Tokens</dt>
+				<dd>{ intStrAlways(e.TokenCountIn) } in · { intStrAlways(e.TokenCountOut) } out</dd>
+			}
+			if e.TokenCountCacheRead > 0 || e.TokenCountCacheCreate > 0 {
+				<dt>Cache</dt>
+				<dd>{ intStrAlways(e.TokenCountCacheRead) } read · { intStrAlways(e.TokenCountCacheCreate) } write</dd>
+			}
 			if e.SessionID != "" {
 				<dt>Session</dt>
 				<dd>

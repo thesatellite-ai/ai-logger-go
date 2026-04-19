@@ -78,7 +78,12 @@ func TestAttachResponse_UpdatesEntryAndFTS(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := s.AttachResponse(ctx, id, "a measure of disorder in a thermodynamic system", "claude-opus-4-7", 42); err != nil {
+	if err := s.AttachResponse(ctx, store.AttachResponseInput{
+		EntryID:   id,
+		Response:  "a measure of disorder in a thermodynamic system",
+		Model:     "claude-opus-4-7",
+		TokensOut: 42,
+	}); err != nil {
 		t.Fatalf("attach: %v", err)
 	}
 

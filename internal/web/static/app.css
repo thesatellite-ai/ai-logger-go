@@ -271,7 +271,16 @@
   }
   .search-shell:focus-within {
     border-color: var(--accent);
-    box-shadow: 0 0 0 4px var(--accent-glow);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+  }
+  /* The shell itself shows focus state — kill the redundant outline
+     the global :focus-visible rule would otherwise paint on the inner
+     <input>. Keep keyboard accessibility via the shell's color shift. */
+  .search-shell .search-input,
+  .search-shell .search-input:focus,
+  .search-shell .search-input:focus-visible {
+    outline: none;
+    box-shadow: none;
   }
   .search-icon {
     flex-shrink: 0;

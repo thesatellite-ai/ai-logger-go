@@ -30,20 +30,26 @@ type Entry = ent.Entry
 
 // InsertEntryInput carries everything needed to persist a fresh prompt
 // row. Only Prompt is meaningfully required; every other field
-// gracefully falls back to zero values.
+// gracefully falls back to zero values. Field comments mirror the
+// schema-level comments in ent/schema/entry.go — see there for source
+// (which hook / tool produces each field).
 type InsertEntryInput struct {
-	Tool          string
-	CWD           string
-	Project       string
-	RepoOwner     string
-	RepoName      string
-	RepoRemote    string
-	GitBranch     string
-	GitCommit     string
+	Tool        string
+	ToolVersion string
+
+	CWD        string
+	Project    string
+	RepoOwner  string
+	RepoName   string
+	RepoRemote string
+	GitBranch  string
+	GitCommit  string
+
 	SessionID     string
 	SessionName   string
 	TurnIndex     int
 	ParentEntryID string
+
 	Hostname      string
 	User          string
 	Shell         string
@@ -51,13 +57,40 @@ type InsertEntryInput struct {
 	TerminalTitle string
 	TTY           string
 	PID           int
-	Prompt        string
-	Response      string
-	Model         string
-	Raw           string
-	TokensIn      int
-	TokensOut     int
-	Tags          string
+
+	Prompt   string
+	Response string
+	Model    string
+	Raw      string
+
+	// Usage / runtime metadata — populated when known (mostly Stop hook).
+	TokensIn         int
+	TokensOut        int
+	TokensCacheRead  int // Anthropic prompt-cache hit; claude-code only.
+	TokensCacheWrite int // Anthropic prompt-cache write; claude-code only.
+	StopReason       string
+	PermissionMode   string // claude-code only
+
+	Tags string
+}
+
+// AttachResponseInput carries the rich set of per-turn metadata a Stop
+// hook can produce. Pass empty values for fields the upstream tool
+// doesn't expose; only non-empty / non-zero fields are written.
+type AttachResponseInput struct {
+	EntryID string
+
+	Response string
+	Model    string
+
+	TokensIn         int
+	TokensOut        int
+	TokensCacheRead  int
+	TokensCacheWrite int
+
+	StopReason     string
+	PermissionMode string
+	ToolVersion    string
 }
 
 // Store is the public facade over ent + the raw FTS5 helpers.
@@ -145,6 +178,7 @@ func (s *Store) InsertEntry(ctx context.Context, in InsertEntryInput) (string, e
 	_, err := s.client.Entry.Create().
 		SetID(id).
 		SetTool(in.Tool).
+		SetToolVersion(in.ToolVersion).
 		SetCwd(in.CWD).
 		SetProject(in.Project).
 		SetRepoOwner(in.RepoOwner).
@@ -169,6 +203,10 @@ func (s *Store) InsertEntry(ctx context.Context, in InsertEntryInput) (string, e
 		SetRaw(in.Raw).
 		SetTokenCountIn(in.TokensIn).
 		SetTokenCountOut(in.TokensOut).
+		SetTokenCountCacheRead(in.TokensCacheRead).
+		SetTokenCountCacheCreate(in.TokensCacheWrite).
+		SetStopReason(in.StopReason).
+		SetPermissionMode(in.PermissionMode).
 		SetTags(in.Tags).
 		Save(ctx)
 	if err != nil {
@@ -180,21 +218,41 @@ func (s *Store) InsertEntry(ctx context.Context, in InsertEntryInput) (string, e
 	return id, nil
 }
 
-// AttachResponse fills in the response (and optional model + tokens)
-// on an existing entry, then re-syncs the FTS5 index for that row.
-// Used by Stop hooks to attach the assistant turn to the prompt entry
-// inserted earlier in the same session.
-func (s *Store) AttachResponse(ctx context.Context, entryID, response, model string, tokensOut int) error {
-	u := s.client.Entry.UpdateOneID(entryID).
-		SetResponse(response)
-	if model != "" {
-		u = u.SetModel(model)
+// AttachResponse fills in the response and any per-turn metadata the
+// Stop hook produced (model, token usage including cache, stop_reason,
+// permission_mode, tool version), then re-syncs the FTS5 index.
+//
+// Only non-empty / non-zero fields are written — pass partial input
+// from adapters that don't expose every field.
+func (s *Store) AttachResponse(ctx context.Context, in AttachResponseInput) error {
+	u := s.client.Entry.UpdateOneID(in.EntryID).
+		SetResponse(in.Response)
+	if in.Model != "" {
+		u = u.SetModel(in.Model)
 	}
-	if tokensOut > 0 {
-		u = u.SetTokenCountOut(tokensOut)
+	if in.TokensIn > 0 {
+		u = u.SetTokenCountIn(in.TokensIn)
+	}
+	if in.TokensOut > 0 {
+		u = u.SetTokenCountOut(in.TokensOut)
+	}
+	if in.TokensCacheRead > 0 {
+		u = u.SetTokenCountCacheRead(in.TokensCacheRead)
+	}
+	if in.TokensCacheWrite > 0 {
+		u = u.SetTokenCountCacheCreate(in.TokensCacheWrite)
+	}
+	if in.StopReason != "" {
+		u = u.SetStopReason(in.StopReason)
+	}
+	if in.PermissionMode != "" {
+		u = u.SetPermissionMode(in.PermissionMode)
+	}
+	if in.ToolVersion != "" {
+		u = u.SetToolVersion(in.ToolVersion)
 	}
 	if _, err := u.Save(ctx); err != nil {
 		return fmt.Errorf("attach response: %w", err)
 	}
-	return ftsUpdateResponse(ctx, s.db, entryID, response)
+	return ftsUpdateResponse(ctx, s.db, in.EntryID, in.Response)
 }
