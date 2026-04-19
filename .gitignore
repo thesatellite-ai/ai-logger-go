@@ -1,0 +1,19 @@
+# build artefacts
+/bin/
+bin/
+
+# GoReleaser output
+dist/
+
+# Taskfile fingerprint cache (https://taskfile.dev/usage/#prevent-unnecessary-work)
+.task/
+
+# local SQLite databases
+*.db
+*.db-wal
+*.db-shm
+
+# editor / OS junk
+.DS_Store
+.idea/
+.vscode/
