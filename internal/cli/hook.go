@@ -61,7 +61,7 @@ func capturePrompt(ctx stdcontext.Context, tool, sessionID, cwd, prompt, trace s
 	if err != nil {
 		return err
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 	_, err = s.InsertEntry(ctx, store.InsertEntryInput{
 		Tool:          tool,
 		CWD:           firstNonEmptyS(cwd, env.CWD),
@@ -95,7 +95,7 @@ func attachResponse(ctx stdcontext.Context, sessionID, response, model string) e
 	if err != nil {
 		return err
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 	entries, err := s.SessionEntries(ctx, sessionID)
 	if err != nil {
 		return err
@@ -121,7 +121,7 @@ func lastAssistantTurn(path string) (text, model string) {
 	if err != nil {
 		return "", ""
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 1024*1024), 32*1024*1024) // 32MB max line — assistant turns can be long
 	type msgLine struct {
@@ -169,7 +169,7 @@ func hookDebug(event string, payload []byte, extra string) {
 	if err != nil {
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	fmt.Fprintf(f, "%s  %s  %s  %s\n", time.Now().Format(time.RFC3339Nano), event, extra, string(payload))
 }
 

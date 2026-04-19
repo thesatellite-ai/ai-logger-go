@@ -1,0 +1,73 @@
+package views
+
+import (
+	"strconv"
+
+	"github.com/khanakia/ai-logger/ent"
+)
+
+// Search is the full search page (rendered when the user lands on
+// /search?q=… directly). The header search box's htmx live-search hits
+// SearchResults instead and swaps just the results region.
+templ Search(query string, entries []*ent.Entry) {
+	@Layout("Search") {
+		<div class="mb-4">
+			<form action="/search" method="get" class="max-w-2xl">
+				<input
+					type="search"
+					name="q"
+					value={ query }
+					autofocus
+					placeholder="Search every prompt and response…"
+					class="w-full px-3 py-2 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+					hx-get="/search/partial"
+					hx-trigger="input changed delay:200ms, search"
+					hx-target="#search-results"
+					hx-push-url="false"
+				/>
+			</form>
+		</div>
+		<div id="search-results">
+			@SearchResults(query, entries)
+		</div>
+	}
+}
+
+// SearchResults is the results fragment — used by the page render AND
+// by the htmx swap on the input box. Returning the same fragment from
+// both call sites keeps the layout identical whether the page reloaded
+// or hot-swapped.
+templ SearchResults(query string, entries []*ent.Entry) {
+	if query == "" {
+		@searchHint()
+	} else {
+		if len(entries) == 0 {
+			@searchEmpty(query)
+		} else {
+			@searchHits(query, entries)
+		}
+	}
+}
+
+templ searchHint() {
+	<p class="text-sm text-slate-500 dark:text-slate-400 mt-6">
+		Type to search across prompts and responses. FTS5 syntax supported (e.g. <code class="font-mono">race OR goroutine</code>).
+	</p>
+}
+
+templ searchEmpty(query string) {
+	<p class="text-sm text-slate-500 dark:text-slate-400 mt-6">
+		No matches { "for" } <span class="font-mono">{ query }</span>.
+	</p>
+}
+
+templ searchHits(query string, entries []*ent.Entry) {
+	<p class="text-sm text-slate-500 dark:text-slate-400 mb-3">
+		{ strconv.Itoa(len(entries)) } match{ pluralES(len(entries)) } { "for" } <span class="font-mono">{ query }</span>
+	</p>
+	<div class="space-y-2">
+		for _, e := range entries {
+			@EntryCard(e)
+		}
+	</div>
+}

@@ -1,0 +1,25 @@
+package views
+
+import "github.com/khanakia/ai-logger/ent"
+
+// Templates renders the starred-only entry list — the user's curated
+// "prompt library".
+templ Templates(entries []*ent.Entry) {
+	@Layout("Templates") {
+		<div class="mb-4 flex items-baseline justify-between">
+			<h1 class="text-xl font-semibold">Templates</h1>
+			<span class="text-sm text-slate-500 dark:text-slate-400">starred entries</span>
+		</div>
+		if len(entries) == 0 {
+			<p class="text-sm text-slate-500 dark:text-slate-400">
+				No starred entries yet. Open any entry and click <span class="text-amber-500">☆ star</span> to add it here.
+			</p>
+		} else {
+			<div class="space-y-2">
+				for _, e := range entries {
+					@EntryCard(e)
+				}
+			</div>
+		}
+	}
+}

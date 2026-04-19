@@ -60,7 +60,7 @@ func ftsSearch(ctx context.Context, db *sql.DB, query string, limit int) ([]stri
 	if err != nil {
 		return nil, fmt.Errorf("fts5 query: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var ids []string
 	for rows.Next() {

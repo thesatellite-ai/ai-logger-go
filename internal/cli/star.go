@@ -39,7 +39,7 @@ func setStar(cmd *cobra.Command, prefix string, v bool) error {
 	if err != nil {
 		return err
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 	id, err := s.ResolveIDPrefix(ctx, prefix)
 	if err != nil {
 		return err
@@ -68,7 +68,7 @@ func newTemplatesCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer s.Close()
+			defer func() { _ = s.Close() }()
 			all, err := s.All(ctx)
 			if err != nil {
 				return err

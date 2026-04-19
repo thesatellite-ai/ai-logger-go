@@ -21,7 +21,7 @@ func newTagCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer s.Close()
+			defer func() { _ = s.Close() }()
 			id, err := s.ResolveIDPrefix(ctx, args[0])
 			if err != nil {
 				return err

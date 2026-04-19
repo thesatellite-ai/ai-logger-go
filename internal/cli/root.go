@@ -41,6 +41,7 @@ func NewRootCmd() *cobra.Command {
 		newSkillCmd(),
 		newHooksCmd(),
 		newHookCmd(),
+		newUICmd(),
 		newDebugCmd(),
 	)
 

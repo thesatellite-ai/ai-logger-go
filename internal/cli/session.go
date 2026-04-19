@@ -51,7 +51,7 @@ func newSessionNameCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer s.Close()
+			defer func() { _ = s.Close() }()
 			n, err := s.RenameSession(ctx, sid, args[0])
 			if err != nil {
 				return err
@@ -87,7 +87,7 @@ func newSessionShowCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer s.Close()
+			defer func() { _ = s.Close() }()
 			entries, err := s.SessionEntries(ctx, sid)
 			if err != nil {
 				return err

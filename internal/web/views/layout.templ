@@ -1,0 +1,70 @@
+// Package views holds every templ component used by the web UI.
+//
+// Generated counterparts (*_templ.go) are produced by `task templ` and
+// are committed alongside the .templ sources so `go build` works on a
+// fresh clone without running templ first. Re-generate after editing
+// any .templ file.
+package views
+
+// Layout is the outer shell every page renders into. It wires Tailwind
+// (CDN play, no build step), htmx, and our small custom CSS, plus a
+// fixed header with global search and primary nav links.
+//
+// Usage:
+//
+//	@Layout("Entries") {
+//	    <h1>...</h1>
+//	}
+templ Layout(title string) {
+	<!DOCTYPE html>
+	<html lang="en" class="h-full">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ title } · ailog</title>
+			<script src="https://cdn.tailwindcss.com"></script>
+			<link rel="stylesheet" href="/static/app.css"/>
+			<script src="/static/htmx.min.js" defer></script>
+			<script>
+				// Respect the system color scheme — Tailwind's `dark:` variants
+				// kick in when <html> has the `dark` class.
+				if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+					document.documentElement.classList.add('dark');
+				}
+			</script>
+		</head>
+		<body class="h-full bg-slate-50 text-slate-900 dark:bg-slate-900 dark:text-slate-100">
+			@header()
+			<main class="mx-auto max-w-6xl px-4 py-6">
+				{ children... }
+			</main>
+		</body>
+	</html>
+}
+
+// header is the persistent top bar — search box on the left, nav on the right.
+templ header() {
+	<header class="border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+		<div class="mx-auto max-w-6xl px-4 py-3 flex items-center gap-4">
+			<a href="/" class="font-semibold text-lg tracking-tight">ailog</a>
+			<form action="/search" method="get" class="flex-1 max-w-2xl">
+				<input
+					type="search"
+					name="q"
+					placeholder="Search every prompt and response…"
+					class="w-full px-3 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+					hx-get="/search/partial"
+					hx-trigger="input changed delay:200ms, search"
+					hx-target="#search-results"
+					hx-push-url="false"
+				/>
+			</form>
+			<nav class="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
+				<a href="/sessions" class="hover:text-slate-900 dark:hover:text-white">Sessions</a>
+				<a href="/projects" class="hover:text-slate-900 dark:hover:text-white">Projects</a>
+				<a href="/templates" class="hover:text-slate-900 dark:hover:text-white">Templates</a>
+				<a href="/stats" class="hover:text-slate-900 dark:hover:text-white">Stats</a>
+			</nav>
+		</div>
+	</header>
+}

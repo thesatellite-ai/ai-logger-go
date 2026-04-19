@@ -18,7 +18,7 @@ func newStatsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer s.Close()
+			defer func() { _ = s.Close() }()
 			st, err := s.ComputeStats(ctx)
 			if err != nil {
 				return err

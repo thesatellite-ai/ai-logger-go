@@ -18,7 +18,7 @@ func newRedactCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer s.Close()
+			defer func() { _ = s.Close() }()
 			id, err := s.ResolveIDPrefix(ctx, args[0])
 			if err != nil {
 				return err
@@ -55,7 +55,7 @@ func newPurgeCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer s.Close()
+			defer func() { _ = s.Close() }()
 			n, err := s.PurgeBefore(ctx, cutoff)
 			if err != nil {
 				return err
