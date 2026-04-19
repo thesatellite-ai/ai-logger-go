@@ -35,7 +35,7 @@ func newImportCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer s.Close()
+			defer func() { _ = s.Close() }()
 
 			var imported, skipped int
 			for _, f := range files {
@@ -88,7 +88,7 @@ func importFile(cmd *cobra.Command, s *store.Store, path string) (int, int, erro
 	if err != nil {
 		return 0, 0, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	ctx := cmd.Context()
 	scanner := bufio.NewScanner(f)

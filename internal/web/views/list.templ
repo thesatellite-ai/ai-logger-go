@@ -1,0 +1,36 @@
+package views
+
+import "github.com/khanakia/ai-logger/ent"
+
+// List is the home page — most recent entries, newest first.
+// `entries` is the slice to render; `total` is the total count for the
+// header summary.
+templ List(entries []*ent.Entry, total int) {
+	@Layout("Entries") {
+		<div class="mb-4 flex items-baseline justify-between">
+			<h1 class="text-xl font-semibold">Recent entries</h1>
+			<span class="text-sm text-slate-500 dark:text-slate-400">
+				showing { len(entries) } of { total }
+			</span>
+		</div>
+		<div id="entry-list" class="space-y-2">
+			if len(entries) == 0 {
+				@empty()
+			} else {
+				for _, e := range entries {
+					@EntryCard(e)
+				}
+			}
+		</div>
+	}
+}
+
+// empty is shown when the DB has no entries yet.
+templ empty() {
+	<div class="rounded-lg border border-dashed border-slate-300 dark:border-slate-600 px-6 py-12 text-center">
+		<p class="text-slate-600 dark:text-slate-300">No entries logged yet.</p>
+		<p class="mt-2 text-sm text-slate-500 dark:text-slate-400">
+			Run <code class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700 font-mono">ailog hooks install</code> and start a Claude Code session.
+		</p>
+	</div>
+}

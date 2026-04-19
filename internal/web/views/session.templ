@@ -1,0 +1,120 @@
+package views
+
+import (
+	"strconv"
+	"time"
+
+	"github.com/khanakia/ai-logger/ent"
+	"github.com/khanakia/ai-logger/internal/store"
+)
+
+// Sessions is the listing page for every distinct session in the DB.
+templ Sessions(summaries []store.SessionSummary) {
+	@Layout("Sessions") {
+		<h1 class="text-xl font-semibold mb-4">Sessions</h1>
+		if len(summaries) == 0 {
+			<p class="text-sm text-slate-500 dark:text-slate-400">No sessions yet.</p>
+		} else {
+			<div class="space-y-2">
+				for _, s := range summaries {
+					@sessionCard(s)
+				}
+			</div>
+		}
+	}
+}
+
+templ sessionCard(s store.SessionSummary) {
+	<a
+		href={ templ.SafeURL("/session/" + s.SessionID) }
+		class="block rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-sm transition"
+	>
+		<div class="flex items-baseline justify-between mb-1">
+			<div class="flex items-baseline gap-3">
+				<span class="font-mono text-xs text-slate-500 dark:text-slate-400">{ shortID(s.SessionID) }</span>
+				if s.SessionName != "" {
+					<span class="font-semibold text-slate-800 dark:text-slate-200">{ s.SessionName }</span>
+				}
+			</div>
+			<span class="text-xs text-slate-500 dark:text-slate-400">{ relativeTime(s.EndedAt) }</span>
+		</div>
+		<div class="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+			if s.Tool != "" {
+				<span class="px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200">{ s.Tool }</span>
+			}
+			if s.Project != "" {
+				<span>{ projectShort(s.Project) }</span>
+			}
+			<span>{ strconv.Itoa(s.TurnCount) } turn{ pluralS(s.TurnCount) }</span>
+			<span title={ s.StartedAt.Format(time.RFC3339) }>{ s.StartedAt.Format("Jan 2, 15:04") }</span>
+		</div>
+	</a>
+}
+
+// SessionDetail is the threaded conversation view for a single session.
+// Editable session name, then alternating prompt/response bubbles.
+templ SessionDetail(sessionID string, sessionName string, entries []*ent.Entry) {
+	@Layout("Session") {
+		<header class="mb-4 border-b border-slate-200 dark:border-slate-700 pb-3">
+			<div class="font-mono text-xs text-slate-500 dark:text-slate-400 mb-1">{ sessionID }</div>
+			@SessionNameForm(sessionID, sessionName)
+		</header>
+		if len(entries) == 0 {
+			<p class="text-sm text-slate-500 dark:text-slate-400">No turns in this session.</p>
+		} else {
+			<div class="space-y-4">
+				for _, e := range entries {
+					@sessionTurn(e)
+				}
+			</div>
+		}
+	}
+}
+
+// SessionNameForm posts to /session/{id}/name and swaps itself with
+// the rendered new name. Out-of-the-box htmx — no JS.
+// Exported so the rename handler can re-render just this fragment.
+templ SessionNameForm(sessionID string, name string) {
+	<form
+		hx-post={ "/session/" + sessionID + "/name" }
+		hx-swap="outerHTML"
+		class="flex items-baseline gap-2"
+	>
+		<input
+			type="text"
+			name="name"
+			value={ name }
+			placeholder="Name this session…"
+			class="flex-1 max-w-md px-2 py-1 rounded border border-transparent hover:border-slate-300 dark:hover:border-slate-600 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-transparent text-lg font-semibold"
+		/>
+		<button type="submit" class="text-xs px-2 py-1 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600">save</button>
+	</form>
+}
+
+// sessionTurn renders one entry as a paired user→assistant block.
+templ sessionTurn(e *ent.Entry) {
+	<div class="space-y-2">
+		<div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3">
+			<div class="flex items-baseline justify-between mb-1">
+				<span class="text-xs font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">User · turn { strconv.Itoa(e.TurnIndex) }</span>
+				<a href={ templ.SafeURL("/entry/" + e.ID) } class="text-xs text-slate-500 dark:text-slate-400 font-mono hover:underline">{ shortID(e.ID) }</a>
+			</div>
+			<div class="markdown text-sm">
+				@templ.Raw(string(RenderMarkdown(e.Prompt)))
+			</div>
+		</div>
+		if e.Response != "" {
+			<div class="rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/10 px-4 py-3 ml-6">
+				<div class="flex items-baseline justify-between mb-1">
+					<span class="text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">Assistant</span>
+					if e.Model != "" {
+						<span class="text-xs text-slate-500 dark:text-slate-400">{ e.Model }</span>
+					}
+				</div>
+				<div class="markdown text-sm">
+					@templ.Raw(string(RenderMarkdown(e.Response)))
+				</div>
+			</div>
+		}
+	</div>
+}

@@ -23,7 +23,7 @@ func newExportCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer s.Close()
+			defer func() { _ = s.Close() }()
 			all, err := s.All(ctx)
 			if err != nil {
 				return err

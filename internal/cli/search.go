@@ -30,7 +30,7 @@ func newSearchCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer s.Close()
+			defer func() { _ = s.Close() }()
 
 			query := strings.Join(args, " ")
 			f := store.SearchFilter{

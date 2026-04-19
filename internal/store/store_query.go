@@ -69,7 +69,7 @@ func (s *Store) ResolveIDPrefix(ctx context.Context, prefix string) (string, err
 	if err != nil {
 		return "", err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var found []string
 	for rows.Next() {
 		var id string
@@ -77,6 +77,9 @@ func (s *Store) ResolveIDPrefix(ctx context.Context, prefix string) (string, err
 			return "", err
 		}
 		found = append(found, id)
+	}
+	if err := rows.Err(); err != nil {
+		return "", err
 	}
 	switch len(found) {
 	case 0:

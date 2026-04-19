@@ -229,8 +229,8 @@ func TestHooksInstall_PreservesExistingUnrelatedKeys(t *testing.T) {
 	// Seed an existing settings.json with some unrelated config.
 	settingsPath := filepath.Join(claudeHome, "settings.json")
 	existing := map[string]any{
-		"env":                 map[string]any{"FOO": "bar"},
-		"someOtherUserKey":    "keep-me",
+		"env":              map[string]any{"FOO": "bar"},
+		"someOtherUserKey": "keep-me",
 		"hooks": map[string]any{
 			"PreToolUse": []any{map[string]any{"hooks": []any{map[string]any{"type": "command", "command": "other"}}}},
 		},
@@ -266,4 +266,4 @@ func TestPromptHook_EmptyPayload_NoCrash(t *testing.T) {
 }
 
 var _ = store.InsertEntryInput{} // keep store import alive if we later add more tests
-var _ = exec.Cmd{}                // in case we want exec-based integration tests
+var _ = exec.Cmd{}               // in case we want exec-based integration tests

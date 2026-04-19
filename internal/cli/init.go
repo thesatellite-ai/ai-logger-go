@@ -25,7 +25,7 @@ func newInitCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer s.Close()
+			defer func() { _ = s.Close() }()
 
 			fmt.Fprintf(cmd.OutOrStdout(), "ailog home: %s\n", home)
 			fmt.Fprintf(cmd.OutOrStdout(), "database:   %s\n\n", dbPath)

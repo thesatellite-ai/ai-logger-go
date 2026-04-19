@@ -15,7 +15,7 @@ func newAddCmd() *cobra.Command {
 	var (
 		promptFlag, responseFlag, entryFlag string
 		tool, model, sessionID, sessionName string
-		rawFile                              string
+		rawFile                             string
 		tokensIn, tokensOut                 int
 		tagCSV                              string
 		noRedact                            bool
@@ -66,7 +66,7 @@ Examples:
 			if err != nil {
 				return err
 			}
-			defer s.Close()
+			defer func() { _ = s.Close() }()
 
 			// --entry path: attach response to existing entry.
 			if entryFlag != "" && prompt == "" {
