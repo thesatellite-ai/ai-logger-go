@@ -17,6 +17,7 @@ import (
 const (
 	PathHealthz       = "/healthz"
 	PathHome          = "/"
+	PathTable         = "/table"
 	PathEntry         = "/entry/{id}"
 	PathEntryJSON     = "/entry/{id}.json"
 	PathEntryStar     = "/entry/{id}/star"
@@ -37,6 +38,7 @@ const (
 func mountRoutes(r chi.Router, h *handlers.Handlers) {
 	r.Get(PathHealthz, h.Healthz)
 	r.Get(PathHome, h.List)
+	r.Get(PathTable, h.Table)
 	r.Get(PathEntry, h.EntryDetail)
 	r.Get(PathEntryJSON, h.EntryJSON)
 	r.Post(PathEntryStar, h.EntryStar)

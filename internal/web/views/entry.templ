@@ -74,6 +74,34 @@ templ EntryDetail(e *ent.Entry, nav EntryNav) {
 	}
 }
 
+// entryStatStrip — compact stats just under the article head, showing
+// the numbers that most answer "how did this turn cost / behave?".
+// Hidden when there are no numbers to show (e.g. non-Anthropic tools).
+templ entryStatStrip(e *ent.Entry) {
+	if e.TokenCountIn+e.TokenCountOut+e.TokenCountCacheRead+e.TokenCountCacheCreate > 0 || e.ToolVersion != "" {
+		<div class="stat-strip" aria-label="turn statistics">
+			if e.TokenCountIn > 0 || e.TokenCountOut > 0 {
+				<span>
+					<span>tokens</span>
+					<b>{ intStrAlways(e.TokenCountIn) } in · { intStrAlways(e.TokenCountOut) } out</b>
+				</span>
+			}
+			if e.TokenCountCacheRead > 0 || e.TokenCountCacheCreate > 0 {
+				<span class="stat-strip__cache">
+					<span>cache</span>
+					<b>{ intStrAlways(e.TokenCountCacheRead) } read · { intStrAlways(e.TokenCountCacheCreate) } write</b>
+				</span>
+			}
+			if e.ToolVersion != "" {
+				<span>
+					<span>ver</span>
+					<b>{ e.ToolVersion }</b>
+				</span>
+			}
+		</div>
+	}
+}
+
 // ornament — the editorial section divider with a label between dots.
 templ ornament(label string) {
 	<div class="ornament">

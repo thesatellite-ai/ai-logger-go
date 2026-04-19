@@ -1,0 +1,105 @@
+package views
+
+import (
+	"strconv"
+	"time"
+
+	"github.com/khanakia/ai-logger/ent"
+)
+
+// TablePage renders a dense, inbox-style table of entries.
+// Contrast with List, which is an editorial card stack for reading;
+// the table is for scanning — what did I do, when, which project,
+// how many tokens, was it cached.
+templ TablePage(entries []*ent.Entry) {
+	@Layout("Table") {
+		<header class="page-head">
+			<h1 class="page-head__title">Every <em>turn</em>, in rows</h1>
+			<span class="page-head__sub">{ strconv.Itoa(len(entries)) } shown</span>
+		</header>
+		if len(entries) == 0 {
+			<div class="empty">
+				<p class="empty__quote">Nothing to list yet.</p>
+			</div>
+		} else {
+			<div class="ailog-table" role="table">
+				<div class="ailog-table__header" role="row">
+					<span role="columnheader">Time</span>
+					<span role="columnheader">Tool</span>
+					<span role="columnheader">Project</span>
+					<span role="columnheader">Branch</span>
+					<span role="columnheader">Prompt</span>
+					<span role="columnheader">Model</span>
+					<span role="columnheader" class="ailog-table__cell--num">Tokens</span>
+					<span role="columnheader" class="ailog-table__cell--num">Cache</span>
+					<span role="columnheader" class="ailog-table__cell--center">★</span>
+				</div>
+				for _, e := range entries {
+					@tableRow(e)
+				}
+			</div>
+		}
+	}
+}
+
+templ tableRow(e *ent.Entry) {
+	<a href={ templ.SafeURL("/entry/" + e.ID) } class="ailog-table__row" role="row">
+		<span class="ailog-table__time" role="cell" title={ e.CreatedAt.Format(time.RFC3339) }>
+			{ relativeTime(e.CreatedAt) }
+		</span>
+		<span role="cell">
+			if e.Tool != "" {
+				<span class="chip chip--tool">{ e.Tool }</span>
+			}
+		</span>
+		<span role="cell" class="ailog-table__dim">{ projectShort(e.Project) }</span>
+		<span role="cell" class="ailog-table__dim">{ e.GitBranch }</span>
+		<span role="cell" class="ailog-table__prompt">{ truncate(e.Prompt, 140) }</span>
+		<span role="cell" class="ailog-table__dim">{ shortModel(e.Model) }</span>
+		<span role="cell" class="ailog-table__cell--num">{ compactInt(e.TokenCountIn + e.TokenCountOut) }</span>
+		<span role="cell" class="ailog-table__cell--num ailog-table__cache">
+			{ compactInt(e.TokenCountCacheRead) }
+		</span>
+		<span role="cell" class="ailog-table__cell--center ailog-table__star">
+			if e.Starred {
+				★
+			}
+		</span>
+	</a>
+}
+
+// shortModel drops common verbose prefixes so "claude-opus-4-7" → "opus-4-7".
+func shortModel(m string) string {
+	if len(m) > 7 && m[:7] == "claude-" {
+		return m[7:]
+	}
+	return m
+}
+
+// compactInt renders 1234 → "1.2k", 12345 → "12k", 1234567 → "1.2M".
+// Zero renders as empty so the table doesn't clutter with 0s.
+func compactInt(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	switch {
+	case n < 1000:
+		return strconv.Itoa(n)
+	case n < 10000:
+		whole := n / 1000
+		frac := (n % 1000) / 100
+		if frac == 0 {
+			return strconv.Itoa(whole) + "k"
+		}
+		return strconv.Itoa(whole) + "." + strconv.Itoa(frac) + "k"
+	case n < 1000000:
+		return strconv.Itoa(n/1000) + "k"
+	default:
+		whole := n / 1000000
+		frac := (n % 1000000) / 100000
+		if frac == 0 {
+			return strconv.Itoa(whole) + "M"
+		}
+		return strconv.Itoa(whole) + "." + strconv.Itoa(frac) + "M"
+	}
+}
