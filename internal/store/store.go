@@ -124,16 +124,33 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	drv := entsql.OpenDB(dialect.SQLite, db)
 	client := ent.NewClient(ent.Driver(drv))
 
-	if err := client.Schema.Create(ctx); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("ent migrate: %w", err)
+	s := &Store{client: client, db: db, path: abs}
+
+	// Fast path: check the stored schema version marker. If it matches
+	// our compile-time SchemaVersion, the DB was migrated by a previous
+	// binary of the same build — skip Schema.Create entirely.
+	//
+	// This keeps Open() well under a millisecond on warm DBs, instead
+	// of paying ent's ~few-ms schema-inspection cost on every single
+	// CLI invocation / hook fire.
+	if currentSchemaVersion(ctx, db) == SchemaVersion {
+		return s, nil
 	}
-	if err := applyFTSMigration(ctx, db); err != nil {
+
+	// Cold / upgraded DB: run the full migration.
+	if err := s.MigrateApply(ctx); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
-
-	return &Store{client: client, db: db, path: abs}, nil
+	if err := ensureSchemaMetaTable(ctx, db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if err := writeSchemaVersion(ctx, db, SchemaVersion); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	return s, nil
 }
 
 // Close releases ent's client and the underlying SQL connection pool.
