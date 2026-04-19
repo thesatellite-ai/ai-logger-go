@@ -42,7 +42,7 @@ func runMigrateApply(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 
 	dryRun, _ := cmd.Flags().GetBool("dry-run")
 	if dryRun {
@@ -75,7 +75,7 @@ func newMigrateStatusCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			defer s.Close()
+			defer func() { _ = s.Close() }()
 			return s.SchemaInspect(ctx, cmd.OutOrStdout())
 		},
 	}

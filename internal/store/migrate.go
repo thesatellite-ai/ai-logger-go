@@ -23,19 +23,30 @@ func (s *Store) MigrateDiff(ctx context.Context) (string, error) {
 	}
 	fmt.Fprintln(&buf)
 	fmt.Fprintln(&buf, "-- FTS5 virtual table (raw SQL, idempotent):")
-	fmt.Fprintln(&buf, ftsDDL)
+	fmt.Fprint(&buf, ftsDDL)
 	return buf.String(), nil
 }
 
-// MigrateApply runs the same additive migration Open() runs, but
-// exposed so `ailog migrate` can report success + elapsed time.
-// Idempotent: safe on an already-up-to-date DB (no-op).
+// MigrateApply runs ent + FTS5 migrations unconditionally and bumps
+// the schema_meta version marker so the next Open() can take the fast
+// path. Safe on an up-to-date DB (all steps are idempotent).
+//
+// Open() skips migrations when schema_meta.version already equals the
+// compile-time SchemaVersion. `ailog migrate` calls this method
+// directly, so it always runs the full check even when the marker says
+// "already current" — useful as a forced repair.
 func (s *Store) MigrateApply(ctx context.Context) error {
 	if err := s.client.Schema.Create(ctx); err != nil {
 		return fmt.Errorf("ent migrate: %w", err)
 	}
 	if err := applyFTSMigration(ctx, s.db); err != nil {
 		return fmt.Errorf("fts5 migrate: %w", err)
+	}
+	if err := ensureSchemaMetaTable(ctx, s.db); err != nil {
+		return fmt.Errorf("schema_meta: %w", err)
+	}
+	if err := writeSchemaVersion(ctx, s.db, SchemaVersion); err != nil {
+		return fmt.Errorf("write version marker: %w", err)
 	}
 	return nil
 }
