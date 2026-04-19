@@ -55,6 +55,20 @@ tasks:
     cmds:
       - '{{.BIN}} {{.CLI_ARGS}}'
 
+  ui:
+    desc: Live-reload `ailog ui` via air — rebuilds on .go/.templ/.css/.js changes
+    cmds:
+      - |
+        if ! command -v air >/dev/null 2>&1; then
+          echo "air not found — installing github.com/air-verse/air@latest"
+          go install github.com/air-verse/air@latest
+        fi
+        if ! command -v templ >/dev/null 2>&1; then
+          echo "templ not found — installing github.com/a-h/templ/cmd/templ@latest"
+          go install github.com/a-h/templ/cmd/templ@latest
+        fi
+        air
+
   install:
     desc: go install into $GOPATH/bin (with version flags)
     cmds:

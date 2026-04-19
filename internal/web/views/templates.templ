@@ -6,16 +6,20 @@ import "github.com/khanakia/ai-logger/ent"
 // "prompt library".
 templ Templates(entries []*ent.Entry) {
 	@Layout("Templates") {
-		<div class="mb-4 flex items-baseline justify-between">
-			<h1 class="text-xl font-semibold">Templates</h1>
-			<span class="text-sm text-slate-500 dark:text-slate-400">starred entries</span>
-		</div>
+		<header class="page-head">
+			<h1 class="page-head__title">Starred <em>templates</em></h1>
+			<span class="page-head__sub">your reusable library</span>
+		</header>
 		if len(entries) == 0 {
-			<p class="text-sm text-slate-500 dark:text-slate-400">
-				No starred entries yet. Open any entry and click <span class="text-amber-500">☆ star</span> to add it here.
-			</p>
+			<div class="empty">
+				<p class="empty__quote">&ldquo;A library is not a luxury but one of the necessities of life.&rdquo;</p>
+				<p class="empty__cite">— henry ward beecher</p>
+				<p class="empty__hint">
+					Open any entry and click <code>★ Star</code> to save it here.
+				</p>
+			</div>
 		} else {
-			<div class="space-y-2">
+			<div class="stack stack-3">
 				for _, e := range entries {
 					@EntryCard(e)
 				}

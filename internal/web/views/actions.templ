@@ -2,61 +2,48 @@ package views
 
 import "github.com/khanakia/ai-logger/ent"
 
-// StarButton renders the star/unstar toggle. Posts to
-// /entry/{id}/star which returns this same fragment with the new
-// state — htmx swaps it in place.
+// StarButton — pill-style toggle. Empty star ⇄ filled saffron star.
 templ StarButton(e *ent.Entry) {
-	<form
-		hx-post={ "/entry/" + e.ID + "/star" }
-		hx-swap="outerHTML"
-		class="inline"
-	>
+	<form hx-post={ "/entry/" + e.ID + "/star" } hx-swap="outerHTML" style="display:inline-flex;">
 		if e.Starred {
-			<button class="text-amber-500 hover:text-amber-600" title="Click to unstar">★ starred</button>
+			<button class="star-toggle star-toggle--on" type="submit" title="Click to unstar">
+				<span class="star-toggle__glyph">★</span>
+				<span>Starred</span>
+			</button>
 		} else {
-			<button class="text-slate-400 hover:text-amber-500" title="Click to star">☆ star</button>
+			<button class="star-toggle" type="submit" title="Click to star">
+				<span class="star-toggle__glyph">☆</span>
+				<span>Star</span>
+			</button>
 		}
 	</form>
 }
 
-// TagsEditor renders a small inline form for editing tags. Submitting
-// posts to /entry/{id}/tag which returns this same fragment with the
-// merged tag set displayed.
+// TagsEditor — chips on the left, dashed-border free-text input on the right.
 templ TagsEditor(e *ent.Entry) {
-	<form
-		hx-post={ "/entry/" + e.ID + "/tag" }
-		hx-swap="outerHTML"
-		class="flex flex-wrap items-center gap-1"
-	>
+	<form hx-post={ "/entry/" + e.ID + "/tag" } hx-swap="outerHTML" class="tag-editor">
 		for _, t := range splitTags(e.Tags) {
-			<span class="px-1.5 py-0.5 text-xs rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200">{ t }</span>
+			<span class="chip">{ t }</span>
 		}
 		<input
 			type="text"
 			name="tags"
-			placeholder="add tag(s) — comma-separated"
-			class="text-xs px-2 py-0.5 rounded border border-slate-300 dark:border-slate-600 bg-transparent focus:outline-none focus:ring-1 focus:ring-blue-500"
+			placeholder="add tags…"
+			aria-label="add tags"
 		/>
 	</form>
 }
 
-// NotesEditor is the textarea for the free-form notes column. Submits
-// via htmx and swaps in the rendered notes preview.
+// NotesEditor — textarea + save button.
 templ NotesEditor(e *ent.Entry) {
-	<form
-		hx-post={ "/entry/" + e.ID + "/notes" }
-		hx-swap="outerHTML"
-		class="space-y-2"
-	>
+	<form hx-post={ "/entry/" + e.ID + "/notes" } hx-swap="outerHTML" class="stack stack-2" style="flex:1;">
 		<textarea
 			name="notes"
+			class="textarea"
 			rows="4"
-			placeholder="Notes (markdown supported)…"
-			class="w-full text-sm px-3 py-2 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+			placeholder="Personal notes (markdown supported)…"
+			aria-label="notes"
 		>{ e.Notes }</textarea>
-		<button
-			type="submit"
-			class="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
-		>save notes</button>
+		<button type="submit" class="btn btn--primary btn--sm" style="align-self: flex-start;">Save notes</button>
 	</form>
 }
