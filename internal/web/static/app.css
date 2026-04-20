@@ -901,6 +901,21 @@
      parent table (.hide-col-X .col-X { display: none }). */
   .page-head > div { min-width: 0; }
 
+  /* Lives just above .table-scroll inside the htmx-swappable region so
+     the row count refreshes with every pagination / filter change. */
+  .table-caption {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    color: var(--ink-3);
+    letter-spacing: var(--ls-wider);
+    margin-bottom: var(--space-2);
+  }
+  .table-caption b {
+    color: var(--ink);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
   .table-scroll {
     width: 100%;
     overflow-x: auto;
