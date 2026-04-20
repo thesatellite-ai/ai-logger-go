@@ -136,7 +136,7 @@ func SiteFooter() templ.Component {
 			templ_7745c5c3_Var4 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<footer class=\"site-footer\"><div class=\"container colophon\"><span>ailog · local prompt log</span> <span>v0.2 · field notebook edition</span></div></footer>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<footer class=\"site-footer\"><div class=\"container colophon\"><span>ailog · local prompt log</span></div></footer>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

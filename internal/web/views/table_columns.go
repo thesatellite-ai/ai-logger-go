@@ -142,3 +142,40 @@ func itoa(n int) string {
 	}
 	return string(buf[i:])
 }
+
+// commifyInt renders 16324 → "16,324". Used by stat cards where the
+// user wants to see the exact count, not the compact "16k" form.
+func commifyInt(n int) string {
+	s := itoa(n)
+	neg := false
+	if len(s) > 0 && s[0] == '-' {
+		neg = true
+		s = s[1:]
+	}
+	// Walk from the right inserting commas every 3 digits.
+	l := len(s)
+	if l <= 3 {
+		if neg {
+			return "-" + s
+		}
+		return s
+	}
+	out := make([]byte, 0, l+l/3)
+	lead := l % 3
+	if lead > 0 {
+		out = append(out, s[:lead]...)
+		if l > lead {
+			out = append(out, ',')
+		}
+	}
+	for i := lead; i < l; i += 3 {
+		out = append(out, s[i:i+3]...)
+		if i+3 < l {
+			out = append(out, ',')
+		}
+	}
+	if neg {
+		return "-" + string(out)
+	}
+	return string(out)
+}

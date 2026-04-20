@@ -1,20 +1,130 @@
 package views
 
 import (
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/khanakia/ai-logger/ent"
 	"github.com/khanakia/ai-logger/internal/store"
 )
 
-// Sessions — listing page for every distinct session.
-templ Sessions(summaries []store.SessionSummary) {
+// SessionsData bundles the state the /sessions page needs.
+type SessionsData struct {
+	Summaries []store.SessionSummary
+	Query     string
+	Sort      string
+	Dir       string
+	Page      int
+	PageSize  int
+	Total     int
+}
+
+// TotalPages is ceil(Total/PageSize) with a floor of 1.
+func (d SessionsData) TotalPages() int {
+	if d.PageSize <= 0 {
+		return 1
+	}
+	n := (d.Total + d.PageSize - 1) / d.PageSize
+	if n < 1 {
+		return 1
+	}
+	return n
+}
+
+// FirstRow / LastRow are 1-indexed for the "showing A–B of C" caption.
+func (d SessionsData) FirstRow() int {
+	if d.Total == 0 {
+		return 0
+	}
+	return (d.Page-1)*d.PageSize + 1
+}
+func (d SessionsData) LastRow() int {
+	end := d.Page * d.PageSize
+	if end > d.Total {
+		end = d.Total
+	}
+	return end
+}
+
+// Sessions — list of distinct sessions, with a search input, sort
+// selector, and pager. Filter hits id / name / tool.
+templ Sessions(d SessionsData) {
 	@Layout("Sessions") {
 		<header class="page-head">
-			<h1 class="page-head__title">All <em>sessions</em></h1>
-			<span class="page-head__sub">{ strconv.Itoa(len(summaries)) } total</span>
+			<div>
+				<h1 class="page-head__title">All <em>sessions</em></h1>
+				<span class="page-head__sub">
+					if d.Total == 0 {
+						no matches
+					} else {
+						showing { strconv.Itoa(d.FirstRow()) }–{ strconv.Itoa(d.LastRow()) } of { strconv.Itoa(d.Total) }
+					}
+				</span>
+			</div>
+			@sessionControls(d)
 		</header>
+		@SessionsList(d.Summaries)
+		@sessionsPager(d)
+		<div class="ailog-hidden-params" hidden>
+			<input type="hidden" name="sort" value={ d.Sort }/>
+			<input type="hidden" name="dir" value={ d.Dir }/>
+			<input type="hidden" name="size" value={ strconv.Itoa(d.PageSize) }/>
+		</div>
+	}
+}
+
+// sessionControls renders the filter + sort bar at the top of the page.
+// The search input uses htmx to swap #ailog-sessions-list in place.
+templ sessionControls(d SessionsData) {
+	<div class="session-controls">
+		<label class="search-shell search-shell--inline">
+			<svg class="search-icon" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+				<circle cx="9" cy="9" r="5.5" stroke="currentColor" stroke-width="1.5"></circle>
+				<path d="M13.5 13.5L17 17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path>
+			</svg>
+			<input
+				type="search"
+				name="q"
+				value={ d.Query }
+				placeholder="filter by id, name, or tool…"
+				class="search-input search-input--small"
+				autocomplete="off"
+				hx-get="/sessions"
+				hx-trigger="input changed delay:250ms, search"
+				hx-target="#ailog-sessions-list"
+				hx-swap="outerHTML"
+				hx-push-url="true"
+				hx-include=".ailog-hidden-params input"
+			/>
+		</label>
+		<label class="session-sort">
+			<span class="eyebrow">Sort</span>
+			<select onchange="window.location = this.value">
+				@sessionSortOption(d, "ended_at", "desc", "Recent activity")
+				@sessionSortOption(d, "started_at", "desc", "Newest started")
+				@sessionSortOption(d, "started_at", "asc", "Oldest started")
+				@sessionSortOption(d, "turn_count", "desc", "Most turns")
+				@sessionSortOption(d, "turn_count", "asc", "Fewest turns")
+				@sessionSortOption(d, "session_name", "asc", "Name A–Z")
+			</select>
+		</label>
+	</div>
+}
+
+templ sessionSortOption(d SessionsData, sort, dir, label string) {
+	<option
+		value={ buildSessionsURL(d, sessionsURLOverride{Sort: sort, Dir: dir, Page: 1}) }
+		selected?={ d.Sort == sort && d.Dir == dir }
+	>
+		{ label }
+	</option>
+}
+
+// SessionsList — the htmx-swappable card stack.
+templ SessionsList(summaries []store.SessionSummary) {
+	<div id="ailog-sessions-list">
 		if len(summaries) == 0 {
 			<div class="empty">
 				<p class="empty__quote">&ldquo;Every conversation begins with a single prompt.&rdquo;</p>
@@ -27,7 +137,7 @@ templ Sessions(summaries []store.SessionSummary) {
 				}
 			</div>
 		}
-	}
+	</div>
 }
 
 templ sessionCard(s store.SessionSummary) {
@@ -56,7 +166,51 @@ templ sessionCard(s store.SessionSummary) {
 	</a>
 }
 
-// SessionDetail — threaded conversation view.
+// sessionsPager renders the page nav (same pattern as /table's pager).
+templ sessionsPager(d SessionsData) {
+	if d.TotalPages() > 1 || d.PageSize != 20 {
+		<nav class="pager" aria-label="pagination">
+			<a
+				class={ "pager__step", templ.KV("pager__step--disabled", d.Page <= 1) }
+				href={ templ.SafeURL(buildSessionsURL(d, sessionsURLOverride{Page: d.Page - 1})) }
+				aria-disabled?={ d.Page <= 1 }
+			>
+				← Previous
+			</a>
+			<span class="pager__status">
+				Page <b>{ strconv.Itoa(d.Page) }</b> of { strconv.Itoa(d.TotalPages()) }
+			</span>
+			<a
+				class={ "pager__step", templ.KV("pager__step--disabled", d.Page >= d.TotalPages()) }
+				href={ templ.SafeURL(buildSessionsURL(d, sessionsURLOverride{Page: d.Page + 1})) }
+				aria-disabled?={ d.Page >= d.TotalPages() }
+			>
+				Next →
+			</a>
+			<label class="pager__size">
+				per page
+				<select onchange="window.location = this.value">
+					@sessionsSizeOption(d, 20)
+					@sessionsSizeOption(d, 50)
+					@sessionsSizeOption(d, 100)
+					@sessionsSizeOption(d, 200)
+				</select>
+			</label>
+		</nav>
+	}
+}
+
+templ sessionsSizeOption(d SessionsData, n int) {
+	<option
+		value={ buildSessionsURL(d, sessionsURLOverride{Page: 1, Size: n}) }
+		selected?={ d.PageSize == n }
+	>
+		{ strconv.Itoa(n) }
+	</option>
+}
+
+// SessionDetail — threaded conversation view (unchanged from prior
+// design; kept here so it stays alongside the list templates).
 templ SessionDetail(sessionID string, sessionName string, entries []*ent.Entry) {
 	@Layout("Session") {
 		<div class="container--content">
@@ -101,7 +255,6 @@ templ SessionNameForm(sessionID string, name string) {
 	</form>
 }
 
-// sessionTurn — one prompt + (optional) response pair.
 templ sessionTurn(e *ent.Entry) {
 	<div class="turn-block">
 		<div class="turn-block__rail turn-block__rail--user">
@@ -126,4 +279,67 @@ templ sessionTurn(e *ent.Entry) {
 			</div>
 		</div>
 	}
+}
+
+// sessionsURLOverride lets buildSessionsURL stamp specific fields
+// without forcing the caller to pass every current value. Zero values
+// mean "inherit from d".
+type sessionsURLOverride struct {
+	Query string
+	Sort  string
+	Dir   string
+	Page  int
+	Size  int
+}
+
+// buildSessionsURL composes a /sessions URL preserving everything
+// except what's explicitly overridden. Used by sort / size dropdowns
+// and the pager links.
+func buildSessionsURL(d SessionsData, o sessionsURLOverride) string {
+	q := url.Values{}
+
+	query := o.Query
+	if query == "" {
+		query = d.Query
+	}
+	if s := strings.TrimSpace(query); s != "" {
+		q.Set("q", s)
+	}
+
+	sort := o.Sort
+	if sort == "" {
+		sort = d.Sort
+	}
+	if sort != "" && sort != "ended_at" {
+		q.Set("sort", sort)
+	}
+
+	dir := o.Dir
+	if dir == "" {
+		dir = d.Dir
+	}
+	if dir != "" && dir != "desc" {
+		q.Set("dir", dir)
+	}
+
+	page := o.Page
+	if page == 0 {
+		page = d.Page
+	}
+	if page > 1 {
+		q.Set("page", strconv.Itoa(page))
+	}
+
+	size := o.Size
+	if size == 0 {
+		size = d.PageSize
+	}
+	if size > 0 && size != 20 {
+		q.Set("size", strconv.Itoa(size))
+	}
+
+	if len(q) == 0 {
+		return "/sessions"
+	}
+	return "/sessions?" + q.Encode()
 }
