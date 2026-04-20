@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/khanakia/ai-logger/internal/render"
 	"github.com/khanakia/ai-logger/internal/store"
 	"github.com/khanakia/ai-logger/internal/web/views"
 )
@@ -111,6 +113,35 @@ func (h *Handlers) SessionDetail(w http.ResponseWriter, r *http.Request) {
 	if err := views.SessionDetail(sessionID, name, entries).Render(ctx, w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+// SessionExportMarkdown handles GET /session/{id}.md — downloads the
+// whole session as a single markdown file with YAML frontmatter. Shared
+// renderer (internal/render) so a future `ailog export --session <id>`
+// emits the identical bytes.
+func (h *Handlers) SessionExportMarkdown(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	sessionID := chi.URLParam(r, "id")
+	entries, err := h.store.SessionEntries(ctx, sessionID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	// Resolve display name the same way the HTML page does (latest
+	// non-empty session_name wins — users can rename mid-session).
+	var name string
+	for _, e := range entries {
+		if e.SessionName != "" {
+			name = e.SessionName
+		}
+	}
+	body := render.SessionMarkdown(sessionID, name, entries)
+	filename := render.SessionFilename(sessionID, name)
+
+	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename=%q`, filename))
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	_, _ = w.Write(body)
 }
 
 // SessionRename handles POST /session/{id}/name with form field "name".
