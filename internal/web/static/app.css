@@ -803,7 +803,7 @@
   }
   .rank-row {
     display: grid;
-    grid-template-columns: 2rem minmax(0, 1fr) 3rem 3.5rem 3.5rem 4rem auto;
+    grid-template-columns: 2rem minmax(0, 1fr) 3rem 3.5rem 3.5rem 3.5rem 4rem auto;
     align-items: center;
     gap: var(--space-3);
     padding-block: var(--space-2);
@@ -830,6 +830,11 @@
   }
   .rank-row__tok--in    { color: var(--ink-3); }
   .rank-row__tok--out   { color: var(--ink-2); }
+  .rank-row__tok--cache {
+    color: var(--accent-soft, var(--ink-3));
+    /* Hover tooltip (title=) carries cache_write when > 0 so we don't
+       need a fifth column for it. */
+  }
   .rank-row__tok--total {
     color: var(--accent);
     font-weight: 500;
@@ -842,7 +847,9 @@
   .rank-row__viz .on { color: var(--accent); }
   @media (max-width: 720px) {
     .rank-row { grid-template-columns: 2rem minmax(0, 1fr) auto auto; gap: var(--space-2); }
-    .rank-row__tok--in, .rank-row__tok--out { display: none; }
+    .rank-row__tok--in,
+    .rank-row__tok--out,
+    .rank-row__tok--cache { display: none; }
     .rank-row__viz { display: none; }
   }
 

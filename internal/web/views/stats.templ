@@ -65,8 +65,13 @@ templ statCard(value string, label string) {
 
 // tokenCard — total tokens in a window shown as the exact count
 // (commified), with a short-form "16.3k" hint below it, and an
-// in/out/cached breakdown in actual numbers. Empty state for windows
-// with no entries carrying usage data.
+// in/out/cache-read/cache-write breakdown in actual numbers. Empty
+// state for windows with no entries carrying usage data.
+//
+// Total is in+out only; cache tokens are accounted separately because
+// they represent the cost-savings signal (cache hits served at a
+// discount, cache writes billed once at a premium) rather than extra
+// tokens you were billed for on top of in+out.
 templ tokenCard(w store.TokenWindow, label string) {
 	<div class="stat-card">
 		if w.Entries == 0 {
@@ -79,7 +84,10 @@ templ tokenCard(w store.TokenWindow, label string) {
 				<span>{ commifyInt(w.In) } in</span>
 				<span>{ commifyInt(w.Out) } out</span>
 				if w.CacheRead > 0 {
-					<span class="stat-card__sub--accent">{ commifyInt(w.CacheRead) } cached</span>
+					<span class="stat-card__sub--accent" title="tokens served from the provider's prompt cache (cache HIT — priced at a discount)">{ commifyInt(w.CacheRead) } cache hit</span>
+				}
+				if w.CacheWrite > 0 {
+					<span class="stat-card__sub--accent" title="tokens written into the provider's prompt cache (cache MISS — priced at the write rate)">{ commifyInt(w.CacheWrite) } cache write</span>
 				}
 			</div>
 		}
@@ -96,8 +104,16 @@ templ rankList(m map[string]int, tokens map[string]store.TokenWindow, total int)
 			if tw.Entries > 0 {
 				<span class="rank-row__tok rank-row__tok--in" title="input tokens">↓ { compactInt(tw.In) }</span>
 				<span class="rank-row__tok rank-row__tok--out" title="output tokens">↑ { compactInt(tw.Out) }</span>
-				<span class="rank-row__tok rank-row__tok--total" title={ commifyInt(tw.Total()) + " total tokens" }>{ compactInt(tw.Total()) }</span>
+				<span class="rank-row__tok rank-row__tok--cache" title={ cacheTitle(tw) }>
+					if tw.CacheRead+tw.CacheWrite > 0 {
+						⟳ { compactInt(tw.CacheRead) }
+					} else {
+						—
+					}
+				</span>
+				<span class="rank-row__tok rank-row__tok--total" title={ commifyInt(tw.Total()) + " total input+output tokens" }>{ compactInt(tw.Total()) }</span>
 			} else {
+				<span class="rank-row__tok rank-row__tok--dim">—</span>
 				<span class="rank-row__tok rank-row__tok--dim">—</span>
 				<span class="rank-row__tok rank-row__tok--dim">—</span>
 				<span class="rank-row__tok rank-row__tok--dim">—</span>
@@ -107,6 +123,21 @@ templ rankList(m map[string]int, tokens map[string]store.TokenWindow, total int)
 			</span>
 		</div>
 	}
+}
+
+// cacheTitle is the hover tooltip for the ⟳ column. Renders both cache
+// read and cache write in exact numbers so the user can see the full
+// breakdown without another column stealing horizontal space. "—" when
+// no cache activity.
+func cacheTitle(w store.TokenWindow) string {
+	if w.CacheRead == 0 && w.CacheWrite == 0 {
+		return "no cache activity"
+	}
+	out := commifyInt(w.CacheRead) + " cache hit"
+	if w.CacheWrite > 0 {
+		out += " · " + commifyInt(w.CacheWrite) + " cache write"
+	}
+	return out
 }
 
 // dotBar renders a 10-cell dot row representing a fraction.
