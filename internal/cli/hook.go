@@ -263,3 +263,34 @@ func firstNonEmptyS(vs ...string) string {
 	}
 	return ""
 }
+
+// flattenContent extracts text from Claude's `message.content` field,
+// which can be either a plain string or an array of typed blocks. Used
+// by the live Stop hook's transcript scanner; the importer has its own
+// copy because the two paths must stay independent.
+func flattenContent(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var s string
+	if err := json.Unmarshal(raw, &s); err == nil {
+		return s
+	}
+	var blocks []struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal(raw, &blocks); err == nil {
+		var out string
+		for _, b := range blocks {
+			if b.Type == "text" && b.Text != "" {
+				if out != "" {
+					out += "\n"
+				}
+				out += b.Text
+			}
+		}
+		return out
+	}
+	return ""
+}

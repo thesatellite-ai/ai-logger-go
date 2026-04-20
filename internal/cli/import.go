@@ -1,204 +1,171 @@
+// Package cli — `ailog import` is a tool-agnostic backfill driver.
+// Each upstream tool is a subcommand backed by an importer.Source
+// registered in internal/importer; this file is the cobra wiring +
+// flag plumbing.
+//
+//	ailog import claude-code [--from PATH]
+//	ailog import codex      [--from PATH]
+//	ailog import opencode   [--from PATH]
+//	ailog import all        [--force] [--since RFC3339] [--limit N]
+//
+// Idempotency comes from the store's import_lines table (per-line SHA
+// dedup) and import_state table (per-file mtime watermark). Re-running
+// the same command is cheap and safe; pass --force to bypass the
+// per-file fast path when re-parsing is intentional.
 package cli
 
 import (
-	"bufio"
-	"crypto/sha256"
-	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
+	"strings"
+	"time"
 
-	"github.com/khanakia/ai-logger/internal/store"
+	"github.com/khanakia/ai-logger/internal/importer"
 	"github.com/spf13/cobra"
 )
 
+// importFlags collects every flag the per-tool subcommands share.
+// Bound once and reused across each registered source's command.
+type importFlags struct {
+	From   string
+	Since  string
+	Limit  int
+	Force  bool
+	Strict bool
+}
+
 func newImportCmd() *cobra.Command {
-	var from string
 	cmd := &cobra.Command{
 		Use:   "import",
-		Short: "Backfill from Claude Code transcript JSONL files (idempotent)",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			ctx := cmd.Context()
-			if from == "" {
-				h, err := os.UserHomeDir()
-				if err != nil {
-					return err
-				}
-				from = filepath.Join(h, ".claude", "projects")
-			}
-			files, err := findJSONL(from)
-			if err != nil {
-				return err
-			}
-			s, err := openStore(ctx)
-			if err != nil {
-				return err
-			}
-			defer func() { _ = s.Close() }()
-
-			var imported, skipped int
-			for _, f := range files {
-				i, sk, err := importFile(cmd, s, f)
-				if err != nil {
-					fmt.Fprintf(cmd.ErrOrStderr(), "skip %s: %v\n", f, err)
-					continue
-				}
-				imported += i
-				skipped += sk
-			}
-			fmt.Fprintf(cmd.OutOrStdout(), "imported %d, skipped %d (already present)\n", imported, skipped)
-			return nil
-		},
+		Short: "Backfill historical entries from a tool's transcript files",
+		Long: "Each subcommand pulls entries from a different tool's native " +
+			"transcript format. Re-runs are idempotent (per-line dedup) and fast " +
+			"(per-file mtime watermarks). Use `import all` to run every source.",
 	}
-	cmd.Flags().StringVar(&from, "from", "", "directory to scan for *.jsonl (default ~/.claude/projects)")
+
+	for _, src := range importer.All() {
+		cmd.AddCommand(newImportSourceCmd(src))
+	}
+	cmd.AddCommand(newImportAllCmd())
 	return cmd
 }
 
-func findJSONL(root string) ([]string, error) {
-	var out []string
-	err := filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		if !d.IsDir() && filepath.Ext(p) == ".jsonl" {
-			out = append(out, p)
-		}
-		return nil
-	})
-	return out, err
-}
-
-type transcriptMsg struct {
-	Type      string          `json:"type"`
-	SessionID string          `json:"sessionId"`
-	Cwd       string          `json:"cwd"`
-	Timestamp string          `json:"timestamp"`
-	Message   json.RawMessage `json:"message"`
-}
-
-type tMessage struct {
-	Role    string          `json:"role"`
-	Content json.RawMessage `json:"content"`
-	Model   string          `json:"model"`
-}
-
-func importFile(cmd *cobra.Command, s *store.Store, path string) (int, int, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return 0, 0, err
-	}
-	defer func() { _ = f.Close() }()
-
-	ctx := cmd.Context()
-	scanner := bufio.NewScanner(f)
-	scanner.Buffer(make([]byte, 1024*1024), 32*1024*1024)
-
-	var lastPromptID string
-	var imported, skipped int
-
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(line) == 0 {
-			continue
-		}
-		hash := hashLine(line)
-		exists, err := s.RawHashExists(ctx, hash)
-		if err != nil {
-			return imported, skipped, err
-		}
-		if exists {
-			skipped++
-			continue
-		}
-
-		var m transcriptMsg
-		if err := json.Unmarshal(line, &m); err != nil {
-			continue
-		}
-		var inner tMessage
-		if len(m.Message) > 0 {
-			_ = json.Unmarshal(m.Message, &inner)
-		}
-		text := flattenContent(inner.Content)
-		if text == "" {
-			continue
-		}
-
-		switch m.Type {
-		case "user":
-			id, err := s.InsertEntry(ctx, store.InsertEntryInput{
-				Tool:      "claude-code",
-				CWD:       m.Cwd,
-				SessionID: m.SessionID,
-				Prompt:    text,
-				Raw:       hash,
-			})
+// newImportSourceCmd builds one `ailog import <name>` subcommand bound
+// to a specific Source. The flag set is identical across sources so
+// muscle memory transfers.
+func newImportSourceCmd(src importer.Source) *cobra.Command {
+	var f importFlags
+	cmd := &cobra.Command{
+		Use:   src.Name(),
+		Short: fmt.Sprintf("Import %s transcripts (default root: %s)", src.Name(), src.DefaultRoot()),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			st, err := openStore(ctx)
 			if err != nil {
-				return imported, skipped, err
+				return err
 			}
-			lastPromptID = id
-			imported++
-		case "assistant":
-			if lastPromptID != "" {
-				if err := s.AttachResponse(ctx, store.AttachResponseInput{
-					EntryID:  lastPromptID,
-					Response: text,
-					Model:    inner.Model,
-				}); err != nil {
-					return imported, skipped, err
-				}
-				lastPromptID = ""
-			} else {
-				_, err := s.InsertEntry(ctx, store.InsertEntryInput{
-					Tool:      "claude-code",
-					CWD:       m.Cwd,
-					SessionID: m.SessionID,
-					Response:  text,
-					Model:     inner.Model,
-					Raw:       hash,
-				})
+			defer func() { _ = st.Close() }()
+
+			opts, err := buildImportOptions(f, cmd)
+			if err != nil {
+				return err
+			}
+
+			stats, err := importer.Run(ctx, st, src, opts)
+			printImportStats(cmd, src.Name(), stats)
+			return err
+		},
+	}
+	bindImportFlags(cmd, &f, src)
+	return cmd
+}
+
+// newImportAllCmd runs every registered source in turn, sharing one
+// store handle. Stops on the first error so partial-state failures
+// surface loudly.
+func newImportAllCmd() *cobra.Command {
+	var f importFlags
+	cmd := &cobra.Command{
+		Use:   "all",
+		Short: "Run every registered import source against its default root",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			ctx := cmd.Context()
+			st, err := openStore(ctx)
+			if err != nil {
+				return err
+			}
+			defer func() { _ = st.Close() }()
+
+			for _, src := range importer.All() {
+				opts, err := buildImportOptions(f, cmd)
 				if err != nil {
-					return imported, skipped, err
+					return err
+				}
+				// `all` ignores --from on purpose — each source's
+				// DefaultRoot() is correct, and one path can't be right
+				// for every tool.
+				opts.Root = ""
+				fmt.Fprintf(cmd.OutOrStdout(), "→ %s\n", src.Name())
+				stats, err := importer.Run(ctx, st, src, opts)
+				printImportStats(cmd, src.Name(), stats)
+				if err != nil {
+					return err
 				}
 			}
-			imported++
-		}
+			return nil
+		},
 	}
-	return imported, skipped, scanner.Err()
+	bindImportFlags(cmd, &f, nil)
+	return cmd
 }
 
-func hashLine(b []byte) string {
-	sum := sha256.Sum256(b)
-	return hex.EncodeToString(sum[:])
+// bindImportFlags attaches the shared flag set to a subcommand. When
+// src is non-nil, --from defaults to the source's DefaultRoot in the
+// help text so users see what they'd get.
+func bindImportFlags(cmd *cobra.Command, f *importFlags, src importer.Source) {
+	defaultFrom := ""
+	if src != nil {
+		defaultFrom = src.DefaultRoot()
+	}
+	cmd.Flags().StringVar(&f.From, "from", "", fmt.Sprintf("transcript root to scan (default %s)", defaultFrom))
+	cmd.Flags().StringVar(&f.Since, "since", "", "skip records older than this RFC3339 timestamp")
+	cmd.Flags().IntVar(&f.Limit, "limit", 0, "stop after importing N records (0 = no cap)")
+	cmd.Flags().BoolVar(&f.Force, "force", false, "ignore per-file mtime watermark and re-parse everything")
+	cmd.Flags().BoolVar(&f.Strict, "strict", false, "treat upstream schema drift on a newer-than-known tool version as a hard reject")
 }
 
-// flattenContent handles both string and array-of-blocks shapes.
-func flattenContent(raw json.RawMessage) string {
-	if len(raw) == 0 {
-		return ""
+// buildImportOptions converts CLI flags into importer.Options, wiring
+// the cobra writer for verbose output and validating --since.
+func buildImportOptions(f importFlags, cmd *cobra.Command) (importer.Options, error) {
+	opts := importer.Options{
+		Root:    f.From,
+		Limit:   f.Limit,
+		Force:   f.Force,
+		Strict:  f.Strict,
+		Verbose: false,
+		Out:     cmd.OutOrStdout(),
 	}
-	// String form.
-	var s string
-	if err := json.Unmarshal(raw, &s); err == nil {
-		return s
-	}
-	// Array of content blocks.
-	var blocks []struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
-	}
-	if err := json.Unmarshal(raw, &blocks); err == nil {
-		var out string
-		for _, b := range blocks {
-			if b.Type == "text" && b.Text != "" {
-				if out != "" {
-					out += "\n"
-				}
-				out += b.Text
-			}
+	if s := strings.TrimSpace(f.Since); s != "" {
+		t, err := time.Parse(time.RFC3339, s)
+		if err != nil {
+			return opts, fmt.Errorf("--since: %w", err)
 		}
-		return out
+		opts.Since = t
 	}
-	return ""
+	return opts, nil
+}
+
+// printImportStats writes the per-source summary line. Suspect-file
+// count is appended only when non-zero so healthy runs stay quiet.
+func printImportStats(cmd *cobra.Command, name string, st importer.Stats) {
+	tail := ""
+	if st.FilesSuspect > 0 {
+		tail = fmt.Sprintf(" — drift watch: %d suspect file(s)", st.FilesSuspect)
+	}
+	fmt.Fprintf(cmd.OutOrStdout(),
+		"%s: %d files (%d skipped via watermark) — %d records (%d skipped, %d new prompts, %d responses attached, %d standalone)%s\n",
+		name,
+		st.Files, st.FilesSkipped,
+		st.Records, st.RecordsSkipped, st.Inserted, st.Attached, st.Standalone,
+		tail,
+	)
 }

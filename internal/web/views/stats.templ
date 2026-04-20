@@ -8,8 +8,9 @@ import (
 	"github.com/khanakia/ai-logger/internal/store"
 )
 
-// Stats — the data sheet. Top: hero numbers. Middle: ranked tables
-// with dot-grid mini-vis. Bottom: time range strip.
+// Stats — the data sheet. Top: hero numbers. Next: token windows
+// (all-time / 30 days / 7 days). Middle: ranked tables by tool /
+// project / model with dot-grid mini-vis. Bottom: time range strip.
 templ Stats(s store.Stats) {
 	@Layout("Stats") {
 		<header class="page-head">
@@ -22,14 +23,24 @@ templ Stats(s store.Stats) {
 			@statCard(strconv.Itoa(s.Starred), "Starred")
 			@statCard(spanLabel(s.FirstEntryAt, s.LastEntryAt), "Span")
 		</section>
+		<h2 class="section-title">Token usage</h2>
+		<section class="stat-grid">
+			@tokenCard(s.TokensAllTime, "All time")
+			@tokenCard(s.Tokens30Days, "Last 30 days")
+			@tokenCard(s.Tokens7Days, "Last 7 days")
+		</section>
 		<div class="stack stack-5">
 			<div class="data-sheet">
 				<div class="data-sheet__heading">By tool</div>
-				@rankList(s.ByTool, s.Total)
+				@rankList(s.ByTool, s.TokensByTool, s.Total)
+			</div>
+			<div class="data-sheet">
+				<div class="data-sheet__heading">By model</div>
+				@rankList(s.ByModel, s.TokensByModel, s.Total)
 			</div>
 			<div class="data-sheet">
 				<div class="data-sheet__heading">By project</div>
-				@rankList(s.ByProject, s.Total)
+				@rankList(s.ByProject, s.TokensByProject, s.Total)
 			</div>
 		</div>
 		<dl class="stat-range">
@@ -52,12 +63,45 @@ templ statCard(value string, label string) {
 	</div>
 }
 
-templ rankList(m map[string]int, total int) {
+// tokenCard — total tokens in a window shown as the exact count
+// (commified), with a short-form "16.3k" hint below it, and an
+// in/out/cached breakdown in actual numbers. Empty state for windows
+// with no entries carrying usage data.
+templ tokenCard(w store.TokenWindow, label string) {
+	<div class="stat-card">
+		if w.Entries == 0 {
+			<div class="stat-card__value stat-card__value--dim">—</div>
+			<div class="stat-card__label">{ label } · no usage data</div>
+		} else {
+			<div class="stat-card__value">{ commifyInt(w.Total()) }</div>
+			<div class="stat-card__hint">{ compactInt(w.Total()) } tokens · { label } · { strconv.Itoa(w.Entries) } entr{ entrySuffix(w.Entries) }</div>
+			<div class="stat-card__sub">
+				<span>{ commifyInt(w.In) } in</span>
+				<span>{ commifyInt(w.Out) } out</span>
+				if w.CacheRead > 0 {
+					<span class="stat-card__sub--accent">{ commifyInt(w.CacheRead) } cached</span>
+				}
+			</div>
+		}
+	</div>
+}
+
+templ rankList(m map[string]int, tokens map[string]store.TokenWindow, total int) {
 	for i, kv := range sortByCount(m) {
+		{{ tw := tokens[kv.K] }}
 		<div class="rank-row">
 			<span class="rank-row__num">{ rankNum(i + 1) }</span>
 			<span class="rank-row__label">{ kv.K }</span>
 			<span class="rank-row__count">{ strconv.Itoa(kv.V) }</span>
+			if tw.Entries > 0 {
+				<span class="rank-row__tok rank-row__tok--in" title="input tokens">↓ { compactInt(tw.In) }</span>
+				<span class="rank-row__tok rank-row__tok--out" title="output tokens">↑ { compactInt(tw.Out) }</span>
+				<span class="rank-row__tok rank-row__tok--total" title={ commifyInt(tw.Total()) + " total tokens" }>{ compactInt(tw.Total()) }</span>
+			} else {
+				<span class="rank-row__tok rank-row__tok--dim">—</span>
+				<span class="rank-row__tok rank-row__tok--dim">—</span>
+				<span class="rank-row__tok rank-row__tok--dim">—</span>
+			}
 			<span class="rank-row__viz" aria-hidden="true">
 				@dotBar(kv.V, total)
 			</span>

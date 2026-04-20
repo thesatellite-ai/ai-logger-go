@@ -90,6 +90,20 @@ func (s *Store) PurgeBefore(ctx context.Context, t time.Time) (int, error) {
 	return n, nil
 }
 
+// TokenWindow aggregates usage totals over a time window — input /
+// output / cache-read / cache-write. Used by ComputeStats for all-time,
+// last-30-days, last-7-days snapshots.
+type TokenWindow struct {
+	In         int `json:"in"`
+	Out        int `json:"out"`
+	CacheRead  int `json:"cache_read"`
+	CacheWrite int `json:"cache_write"`
+	Entries    int `json:"entries"` // how many entries contributed
+}
+
+// Total returns input+output (the number most people mean by "tokens").
+func (w TokenWindow) Total() int { return w.In + w.Out }
+
 // Stats is a snapshot of the store for reporting. Time fields are
 // pointers so JSON-encoded output omits them when the DB is empty.
 type Stats struct {
@@ -97,9 +111,25 @@ type Stats struct {
 	Starred      int            `json:"starred"`
 	ByTool       map[string]int `json:"by_tool"`
 	ByProject    map[string]int `json:"by_project"`
+	ByModel      map[string]int `json:"by_model"`
 	BySession    int            `json:"distinct_sessions"`
 	FirstEntryAt *time.Time     `json:"first_entry_at,omitempty"`
 	LastEntryAt  *time.Time     `json:"last_entry_at,omitempty"`
+
+	// Token usage over three time windows. Zero values when no
+	// entries carry usage data (non-Anthropic tools / pre-Tier-1
+	// captures).
+	TokensAllTime TokenWindow `json:"tokens_all_time"`
+	Tokens30Days  TokenWindow `json:"tokens_30d"`
+	Tokens7Days   TokenWindow `json:"tokens_7d"`
+
+	// Per-group token aggregates — same TokenWindow shape, keyed by
+	// the grouping dimension. Populated alongside the count maps so
+	// the rank tables can show "12 entries · 18.4k in / 36.1k out"
+	// per tool/model/project without a second pass.
+	TokensByTool    map[string]TokenWindow `json:"tokens_by_tool"`
+	TokensByModel   map[string]TokenWindow `json:"tokens_by_model"`
+	TokensByProject map[string]TokenWindow `json:"tokens_by_project"`
 }
 
 // ComputeStats aggregates simple counts across the whole DB.
@@ -108,19 +138,31 @@ func (s *Store) ComputeStats(ctx context.Context) (Stats, error) {
 	var st Stats
 	st.ByTool = map[string]int{}
 	st.ByProject = map[string]int{}
+	st.ByModel = map[string]int{}
+	st.TokensByTool = map[string]TokenWindow{}
+	st.TokensByModel = map[string]TokenWindow{}
+	st.TokensByProject = map[string]TokenWindow{}
 
 	entries, err := s.All(ctx)
 	if err != nil {
 		return st, err
 	}
+	now := time.Now()
+	d30 := now.AddDate(0, 0, -30)
+	d7 := now.AddDate(0, 0, -7)
+
 	sessions := map[string]struct{}{}
 	for _, e := range entries {
 		st.Total++
 		if e.Starred {
 			st.Starred++
 		}
-		st.ByTool[nonEmpty(e.Tool, "(none)")]++
-		st.ByProject[nonEmpty(e.Project, "(none)")]++
+		toolKey := nonEmpty(e.Tool, "(none)")
+		projKey := nonEmpty(e.Project, "(none)")
+		modelKey := nonEmpty(e.Model, "(none)")
+		st.ByTool[toolKey]++
+		st.ByProject[projKey]++
+		st.ByModel[modelKey]++
 		if e.SessionID != "" {
 			sessions[e.SessionID] = struct{}{}
 		}
@@ -133,9 +175,45 @@ func (s *Store) ComputeStats(ctx context.Context) (Stats, error) {
 			tt := t
 			st.LastEntryAt = &tt
 		}
+
+		// Token windows — only count when there's actual usage data,
+		// so TokenWindow.Entries reflects "entries WITH usage", not
+		// "all entries in this window". Useful context: lets the UI
+		// show "0 entries with token data" honestly when nothing's
+		// been captured with Tier 1 metadata yet.
+		if e.TokenCountIn > 0 || e.TokenCountOut > 0 ||
+			e.TokenCountCacheRead > 0 || e.TokenCountCacheCreate > 0 {
+			addToWindow(&st.TokensAllTime, e)
+			if t.After(d30) {
+				addToWindow(&st.Tokens30Days, e)
+			}
+			if t.After(d7) {
+				addToWindow(&st.Tokens7Days, e)
+			}
+			addToGroup(st.TokensByTool, toolKey, e)
+			addToGroup(st.TokensByModel, modelKey, e)
+			addToGroup(st.TokensByProject, projKey, e)
+		}
 	}
 	st.BySession = len(sessions)
 	return st, nil
+}
+
+// addToWindow increments a TokenWindow by one entry's usage.
+func addToWindow(w *TokenWindow, e *Entry) {
+	w.In += e.TokenCountIn
+	w.Out += e.TokenCountOut
+	w.CacheRead += e.TokenCountCacheRead
+	w.CacheWrite += e.TokenCountCacheCreate
+	w.Entries++
+}
+
+// addToGroup folds one entry's usage into the keyed bucket. Maps store
+// values not pointers, so we read-modify-write the struct.
+func addToGroup(m map[string]TokenWindow, key string, e *Entry) {
+	w := m[key]
+	addToWindow(&w, e)
+	m[key] = w
 }
 
 // RawHashExists reports whether an entry with the given raw blob has

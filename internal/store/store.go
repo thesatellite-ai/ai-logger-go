@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"time"
 
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
@@ -72,6 +73,12 @@ type InsertEntryInput struct {
 	PermissionMode   string // claude-code only
 
 	Tags string
+
+	// CreatedAt overrides the row's created_at when non-nil. Live capture
+	// (hooks / `ailog add`) leaves this nil so the schema default
+	// (time.Now) wins. Backfill paths (importer) set it from the source
+	// transcript so historical entries land at their original timestamps.
+	CreatedAt *time.Time
 }
 
 // AttachResponseInput carries the rich set of per-turn metadata a Stop
@@ -125,6 +132,13 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	client := ent.NewClient(ent.Driver(drv))
 
 	s := &Store{client: client, db: db, path: abs}
+
+	// Importer bookkeeping tables — IF NOT EXISTS, fast (~µs) on warm
+	// DBs, no schema-version bump needed because additive raw SQL.
+	if err := ensureImportTables(ctx, db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 
 	// Fast path: check the stored schema version marker. If it matches
 	// our compile-time SchemaVersion, the DB was migrated by a previous
@@ -192,10 +206,14 @@ func (s *Store) InsertEntry(ctx context.Context, in InsertEntryInput) (string, e
 			}
 		}
 	}
-	_, err := s.client.Entry.Create().
+	create := s.client.Entry.Create().
 		SetID(id).
 		SetTool(in.Tool).
-		SetToolVersion(in.ToolVersion).
+		SetToolVersion(in.ToolVersion)
+	if in.CreatedAt != nil {
+		create = create.SetCreatedAt(*in.CreatedAt)
+	}
+	_, err := create.
 		SetCwd(in.CWD).
 		SetProject(in.Project).
 		SetRepoOwner(in.RepoOwner).

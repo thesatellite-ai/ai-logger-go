@@ -76,3 +76,151 @@ func sortByEndedAtDesc(xs []SessionSummary) {
 		}
 	}
 }
+
+// BrowseSessionsInput drives the /sessions page: a free-text query
+// matched against session_id + session_name + tool, plus sort + pager.
+//
+// Query is a case-insensitive substring match applied post-aggregation.
+// Sort accepts: "ended_at" (default), "started_at", "turn_count",
+// "session_name". Dir: "asc" | "desc" (default desc).
+type BrowseSessionsInput struct {
+	Query  string
+	Sort   string
+	Dir    string
+	Limit  int
+	Offset int
+}
+
+// BrowseSessions returns a filtered + sorted + paginated session list
+// along with the matching total. Aggregation happens in Go (same as
+// Sessions()); we don't push this down to SQL because each session's
+// row count / last-activity requires grouping all entries anyway.
+func (s *Store) BrowseSessions(ctx context.Context, in BrowseSessionsInput) ([]SessionSummary, int, error) {
+	all, err := s.Sessions(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Filter (case-insensitive substring on id | name | tool).
+	if q := trimLower(in.Query); q != "" {
+		filtered := all[:0]
+		for _, s := range all {
+			if containsFold(s.SessionID, q) || containsFold(s.SessionName, q) || containsFold(s.Tool, q) {
+				filtered = append(filtered, s)
+			}
+		}
+		all = filtered
+	}
+
+	// Sort.
+	sortSessions(all, in.Sort, in.Dir)
+
+	total := len(all)
+
+	// Paginate.
+	limit := in.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	offset := in.Offset
+	if offset < 0 {
+		offset = 0
+	}
+	if offset >= total {
+		return nil, total, nil
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	return all[offset:end], total, nil
+}
+
+// sortSessions orders a slice in-place per the input. Default is
+// ended_at desc (latest activity first).
+func sortSessions(xs []SessionSummary, sortKey, dir string) {
+	if sortKey == "" {
+		sortKey = "ended_at"
+	}
+	asc := dir == "asc"
+	less := func(a, b SessionSummary) bool {
+		switch sortKey {
+		case "started_at":
+			return a.StartedAt.Before(b.StartedAt)
+		case "turn_count":
+			return a.TurnCount < b.TurnCount
+		case "session_name":
+			return a.SessionName < b.SessionName
+		default: // ended_at
+			return a.EndedAt.Before(b.EndedAt)
+		}
+	}
+	for i := 1; i < len(xs); i++ {
+		for j := i; j > 0; j-- {
+			// "out of order" depends on direction. Use strict less in
+			// both branches so equal keys don't swap (stability).
+			var swap bool
+			if asc {
+				swap = less(xs[j], xs[j-1])
+			} else {
+				swap = less(xs[j-1], xs[j])
+			}
+			if !swap {
+				break
+			}
+			xs[j], xs[j-1] = xs[j-1], xs[j]
+		}
+	}
+}
+
+// containsFold is a lowercase substring match, ASCII-aware. Good
+// enough for session ids (UUIDs), names (user-entered), and tool
+// values — no need to pull in the unicode package.
+func containsFold(haystack, needle string) bool {
+	if needle == "" {
+		return true
+	}
+	return indexFold(haystack, needle) >= 0
+}
+
+func indexFold(haystack, needle string) int {
+	if len(needle) > len(haystack) {
+		return -1
+	}
+	hl, nl := len(haystack), len(needle)
+	for i := 0; i+nl <= hl; i++ {
+		match := true
+		for j := 0; j < nl; j++ {
+			if toLowerByte(haystack[i+j]) != toLowerByte(needle[j]) {
+				match = false
+				break
+			}
+		}
+		if match {
+			return i
+		}
+	}
+	return -1
+}
+
+func toLowerByte(b byte) byte {
+	if b >= 'A' && b <= 'Z' {
+		return b + 32
+	}
+	return b
+}
+
+func trimLower(s string) string {
+	start, end := 0, len(s)
+	for start < end && (s[start] == ' ' || s[start] == '\t') {
+		start++
+	}
+	for end > start && (s[end-1] == ' ' || s[end-1] == '\t') {
+		end--
+	}
+	out := make([]byte, end-start)
+	for i := 0; i < end-start; i++ {
+		out[i] = toLowerByte(s[start+i])
+	}
+	return string(out)
+}
