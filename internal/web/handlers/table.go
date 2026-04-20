@@ -74,16 +74,6 @@ func (h *Handlers) Table(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-	// htmx swap — just the tbody. Pager stays stale until full reload,
-	// which is a deliberate trade-off: swapping the pager too would
-	// cost an oob response and add complexity.
-	if r.Header.Get("HX-Request") == "true" {
-		if err := views.TableBody(entries).Render(ctx, w); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
-		return
-	}
-
 	data := views.TableData{
 		Entries:  entries,
 		Sort:     sort,
@@ -93,6 +83,17 @@ func (h *Handlers) Table(w http.ResponseWriter, r *http.Request) {
 		PageSize: size,
 		Total:    total,
 	}
+
+	// htmx swap — return the whole #ailog-table-region so pager + row
+	// count update alongside the rows. Keeps pagination / filter / size
+	// changes free of full-page reload (which would scroll to top).
+	if r.Header.Get("HX-Request") == "true" {
+		if err := views.TableRegion(data).Render(ctx, w); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
 	if err := views.TablePage(data).Render(ctx, w); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
