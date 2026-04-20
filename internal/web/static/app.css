@@ -831,9 +831,13 @@
   .rank-row__tok--in    { color: var(--ink-3); }
   .rank-row__tok--out   { color: var(--ink-2); }
   .rank-row__tok--cache {
-    color: var(--accent-soft, var(--ink-3));
-    /* Hover tooltip (title=) carries cache_write when > 0 so we don't
-       need a fifth column for it. */
+    /* Muted-accent tier: clearly visible and distinct from both
+       --ink (in/out) and pure --accent (total). color-mix is widely
+       supported (Safari 16.2+, Chrome 111+, Firefox 113+); we have
+       no need for a fallback because our own palette is already
+       modern-browser-only. Hover tooltip (title=) carries cache_write
+       when > 0 so we don't need a fifth column for it. */
+    color: color-mix(in srgb, var(--accent) 55%, var(--ink-2));
   }
   .rank-row__tok--total {
     color: var(--accent);
