@@ -1,9 +1,30 @@
 name: Release
 
+# Manual only. Two modes, gated by the `tag` input:
+#
+#   tag = ""         → snapshot build. GoReleaser runs with --snapshot,
+#                      no GitHub Release is published, but the dist/
+#                      directory (cross-compiled binaries + archives)
+#                      is uploaded as a workflow artifact you can
+#                      download from the run page. Use this for ad-hoc
+#                      builds of an arbitrary branch.
+#
+#   tag = "v0.2.0"   → full release. The workflow creates the tag on
+#                      the currently checked-out ref, pushes it, then
+#                      runs GoReleaser which publishes archives to
+#                      https://github.com/khanakia/ai-logger-go/releases.
+#                      Fails if the tag already exists.
+#
+# Previously only fired on `push: tags: v*` — explaining why a branch
+# push produced no artifacts. That trigger is now gone; every release
+# path goes through this workflow_dispatch.
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v0.2.0). Leave empty for snapshot build (no release, artifacts only).'
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -22,10 +43,44 @@ jobs:
         with:
           go-version-file: go.mod
 
+      # Only runs when the user provided a tag. Creates + pushes it so
+      # GoReleaser sees a real tag to release. Uses the default
+      # GITHUB_TOKEN (contents: write above) so no extra setup needed.
+      - name: Create + push tag
+        if: ${{ inputs.tag != '' }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git rev-parse -q --verify "refs/tags/${{ inputs.tag }}" >/dev/null; then
+            echo "::error::tag ${{ inputs.tag }} already exists"
+            exit 1
+          fi
+          git tag -a "${{ inputs.tag }}" -m "${{ inputs.tag }}"
+          git push origin "${{ inputs.tag }}"
+
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v7
         with:
           version: latest
-          args: release --clean
+          # Snapshot when no tag supplied; real release when tag is set
+          # (GoReleaser reads the freshly-pushed tag via the checkout
+          # history, no re-checkout needed).
+          args: >-
+            release --clean
+            ${{ inputs.tag == '' && '--snapshot' || '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Uploaded for both modes. For real releases this is redundant
+      # with the published GitHub Release (easy to download from the
+      # Releases page) — for snapshots it's the only way to get the
+      # binaries. Runs always so a failed release still leaves a trail.
+      - name: Upload dist/ as workflow artifact
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ailog-${{ inputs.tag || github.sha }}
+          path: dist/
+          if-no-files-found: warn
+          retention-days: 30
