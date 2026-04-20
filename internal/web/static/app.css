@@ -1482,11 +1482,18 @@
 
 /* ═══ PROSE (markdown output styling) ═════════════════════════════════════ */
 @layer prose {
+  /* `overflow-wrap: anywhere` lets unbreakable strings (long URLs,
+     hashes, paths) wrap at any character when they'd otherwise blow
+     past the container. Unlike `word-break: break-all` this only
+     kicks in for strings that don't fit — normal prose still breaks
+     at whitespace. Combined with the .turn-block grid's
+     minmax(0, 1fr), this fully contains wide inline content. */
   .prose {
     font-family: var(--font-serif);
     font-size: var(--fs-lg);
     line-height: var(--lh-prose);
     color: var(--ink);
+    overflow-wrap: anywhere;
   }
   .prose > * + * { margin-top: var(--space-4); }
   .prose h1, .prose h2, .prose h3, .prose h4 {
