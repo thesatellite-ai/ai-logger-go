@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/khanakia/ai-logger/internal/config"
 	"github.com/spf13/cobra"
@@ -198,9 +199,30 @@ func newHooksUninstallCmd() *cobra.Command {
 			if err := json.Unmarshal(b, &settings); err != nil {
 				return err
 			}
+
+			// Surgical removal: keep every hook entry that isn't ours.
+			// Matching on the substring "ailog hook" catches every
+			// command the install writes regardless of which binary
+			// path is current. If a user hand-wires a different tool
+			// into the same event, their entry survives.
+			removed := 0
 			if hooks, ok := settings["hooks"].(map[string]any); ok {
 				for event := range spec.events {
-					delete(hooks, event)
+					raw, present := hooks[event]
+					if !present {
+						continue
+					}
+					groups, ok := raw.([]any)
+					if !ok {
+						continue
+					}
+					kept, n := filterAilogHookGroups(groups)
+					removed += n
+					if len(kept) == 0 {
+						delete(hooks, event)
+					} else {
+						hooks[event] = kept
+					}
 				}
 				if len(hooks) == 0 {
 					delete(settings, "hooks")
@@ -208,16 +230,104 @@ func newHooksUninstallCmd() *cobra.Command {
 					settings["hooks"] = hooks
 				}
 			}
-			out, _ := json.MarshalIndent(settings, "", "  ")
+
+			out, err := json.MarshalIndent(settings, "", "  ")
+			if err != nil {
+				return err
+			}
 			if err := os.WriteFile(path, out, 0o644); err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "removed %s hooks\n", spec.name)
+			if removed == 0 {
+				fmt.Fprintf(cmd.OutOrStdout(), "no %s hooks to remove (nothing in %s matched `ailog hook`)\n", spec.name, path)
+			} else {
+				fmt.Fprintf(cmd.OutOrStdout(), "removed %d %s hook entr%s from %s (non-ailog hooks preserved)\n",
+					removed, spec.name, pluralEntries(removed), path)
+			}
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&tool, "tool", "claude-code", "tool to uninstall hooks for")
 	return cmd
+}
+
+// filterAilogHookGroups walks the nested hook-group structure Claude
+// uses and drops only the command entries that look like `ailog hook
+// …`. Groups whose `hooks` array is emptied out are dropped whole so
+// the settings file doesn't grow vestigial group wrappers.
+//
+// Shape walked (example):
+//
+//	hooks:
+//	  UserPromptSubmit:
+//	    - hooks:
+//	        - type: command
+//	          command: "/abs/path/to/ailog hook claude-code prompt"
+//	        - type: command
+//	          command: "/some/other/tool --flag"      # kept
+//
+// Returns the kept groups and the count of command entries dropped.
+func filterAilogHookGroups(groups []any) ([]any, int) {
+	kept := groups[:0]
+	removed := 0
+	for _, g := range groups {
+		group, ok := g.(map[string]any)
+		if !ok {
+			kept = append(kept, g) // unexpected shape; leave it alone
+			continue
+		}
+		inner, ok := group["hooks"].([]any)
+		if !ok {
+			kept = append(kept, g)
+			continue
+		}
+		keptInner := inner[:0]
+		for _, h := range inner {
+			entry, ok := h.(map[string]any)
+			if !ok {
+				keptInner = append(keptInner, h)
+				continue
+			}
+			cmdStr, _ := entry["command"].(string)
+			if isAilogHookCommand(cmdStr) {
+				removed++
+				continue
+			}
+			keptInner = append(keptInner, h)
+		}
+		if len(keptInner) == 0 {
+			// All hooks in this group were ours; drop the group.
+			continue
+		}
+		group["hooks"] = keptInner
+		kept = append(kept, group)
+	}
+	// Return a freshly-allocated slice so we don't alias the caller's
+	// backing array if they kept a reference.
+	out := make([]any, len(kept))
+	copy(out, kept)
+	return out, removed
+}
+
+// isAilogHookCommand reports whether a settings.json command string
+// was written by `ailog hooks install`. Matches the `ailog hook`
+// substring — includes the trailing space so an unrelated tool called
+// `ailog-hook-thing` wouldn't match by accident. The install always
+// writes `%s hook %s` (binary + literal " hook " + adapter name).
+func isAilogHookCommand(cmd string) bool {
+	if cmd == "" {
+		return false
+	}
+	return strings.Contains(cmd, " hook ") && strings.Contains(cmd, "ailog")
+}
+
+// pluralEntries returns "y" for 1 entry and "ies" otherwise so the
+// output message reads naturally.
+func pluralEntries(n int) string {
+	if n == 1 {
+		return "y"
+	}
+	return "ies"
 }
 
 func newHooksShowCmd() *cobra.Command {
