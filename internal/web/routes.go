@@ -27,6 +27,7 @@ const (
 	PathSearchPartial = "/search/partial"
 	PathSessions      = "/sessions"
 	PathSession       = "/session/{id}"
+	PathSessionMD     = "/session/{id}.md"
 	PathSessionRename = "/session/{id}/name"
 	PathProjects      = "/projects"
 	PathTemplates     = "/templates"
@@ -48,6 +49,7 @@ func mountRoutes(r chi.Router, h *handlers.Handlers) {
 	r.Get(PathSearchPartial, h.SearchPartial)
 	r.Get(PathSessions, h.Sessions)
 	r.Get(PathSession, h.SessionDetail)
+	r.Get(PathSessionMD, h.SessionExportMarkdown)
 	r.Post(PathSessionRename, h.SessionRename)
 	r.Get(PathProjects, h.Projects)
 	r.Get(PathTemplates, h.Templates)
@@ -72,6 +74,9 @@ func URLEntryNotes(id string) string { return "/entry/" + id + "/notes" }
 
 // URLSession builds the session view URL for a session id.
 func URLSession(id string) string { return "/session/" + id }
+
+// URLSessionMD builds the markdown-export URL for a session id.
+func URLSessionMD(id string) string { return "/session/" + id + ".md" }
 
 // URLSessionRename builds the session-name endpoint for a session id.
 func URLSessionRename(id string) string { return "/session/" + id + "/name" }

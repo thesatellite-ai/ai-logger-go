@@ -217,8 +217,20 @@ templ SessionDetail(sessionID string, sessionName string, entries []*ent.Entry) 
 			<header class="page-head" style="display: block; padding-bottom: var(--space-5);">
 				<div class="article__id mb-3">{ sessionID }</div>
 				@SessionNameForm(sessionID, sessionName)
-				<div class="meta mt-4">
-					<span>{ strconv.Itoa(len(entries)) } turn{ pluralS(len(entries)) }</span>
+				<div class="row row--between mt-4">
+					<div class="meta">
+						<span>{ strconv.Itoa(len(entries)) } turn{ pluralS(len(entries)) }</span>
+					</div>
+					if len(entries) > 0 {
+						<a
+							href={ templ.SafeURL("/session/" + sessionID + ".md") }
+							class="btn btn--sm btn--ghost"
+							download
+							title="Download the whole session as Markdown"
+						>
+							↓ Download .md
+						</a>
+					}
 				</div>
 			</header>
 			if len(entries) == 0 {
