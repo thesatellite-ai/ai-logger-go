@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"os/exec"
 	"runtime"
@@ -34,7 +35,8 @@ expose it on the LAN (no auth, do this only on trusted networks).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
 
-			// Resolve bind address: --addr wins, else 127.0.0.1:<port>.
+			// Resolve the intended bind address. --addr wins, else
+			// 127.0.0.1:<port>.
 			bind := addr
 			if bind == "" {
 				bind = fmt.Sprintf("127.0.0.1:%d", port)
@@ -43,8 +45,36 @@ expose it on the LAN (no auth, do this only on trusted networks).`,
 				return fmt.Errorf("refusing to bind to %s without --allow-network (no auth)", bind)
 			}
 
+			// Bind the listener here (rather than letting http.Server
+			// ListenAndServe do it) so we can fall through to an
+			// OS-assigned port on conflict without a TOCTOU race.
+			//
+			// Explicit --port / --addr is honored strictly — a bind
+			// failure surfaces as an error instead of silently using a
+			// different port, because "I asked for 9000 and got 9001"
+			// is the most confusing UX possible.
+			portExplicit := cmd.Flags().Changed("port") || cmd.Flags().Changed("addr")
+			l, err := net.Listen("tcp", bind)
+			if err != nil {
+				if portExplicit {
+					return fmt.Errorf("bind %s: %w", bind, err)
+				}
+				// Defaults in use — ask the kernel for any free port.
+				// Same host, just :0 for the port.
+				host, _, _ := net.SplitHostPort(bind)
+				l, err = net.Listen("tcp", net.JoinHostPort(host, "0"))
+				if err != nil {
+					return fmt.Errorf("bind %s: %w", host+":0", err)
+				}
+				actual := l.Addr().(*net.TCPAddr).Port
+				fmt.Fprintf(cmd.OutOrStdout(),
+					"port %d in use → using %d instead\n", port, actual)
+				bind = net.JoinHostPort(host, fmt.Sprintf("%d", actual))
+			}
+
 			s, err := openStore(ctx)
 			if err != nil {
+				_ = l.Close()
 				return err
 			}
 			defer func() { _ = s.Close() }()
@@ -56,7 +86,7 @@ expose it on the LAN (no auth, do this only on trusted networks).`,
 			if !noOpen {
 				go openBrowserWhenReady("http://" + bind)
 			}
-			return srv.Run()
+			return srv.RunListener(l)
 		},
 	}
 	cmd.Flags().StringVar(&addr, "addr", "", "explicit host:port bind (overrides --port)")
