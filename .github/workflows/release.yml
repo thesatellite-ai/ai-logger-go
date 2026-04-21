@@ -45,14 +45,40 @@ jobs:
     runs-on: ubuntu-latest
     # `[skip release]` in the commit subject/body opts this run out.
     # workflow_dispatch always runs because inputs are intentional.
-    if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[skip release]') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
+      # Opt-out check. Previously we used the workflow-level `if:`
+      # with contains(head_commit.message, ...) — that matches ANY
+      # occurrence of the marker in the commit message, including the
+      # documentation block describing the marker itself (yes, that
+      # happened). Now we inspect only the commit SUBJECT line, via
+      # `git log -1 --format=%s`, so descriptions in the body can't
+      # self-trigger a skip.
+      - name: Evaluate skip marker
+        id: skip
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          subject="$(git log -1 --format=%s)"
+          echo "subject: $subject"
+          case "$subject" in
+            *"[skip release]"*)
+              echo "::notice::commit subject contains opt-out marker — release skipped"
+              echo "skip=true"  >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "skip=false" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+
       - name: Set up Go
+        if: steps.skip.outputs.skip != 'true'
         uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
@@ -64,6 +90,7 @@ jobs:
       #   snapshot: "true" if GoReleaser should use --snapshot
       - name: Resolve release tag
         id: v
+        if: steps.skip.outputs.skip != 'true'
         run: |
           set -euo pipefail
           event="${{ github.event_name }}"
@@ -116,7 +143,7 @@ jobs:
       # GITHUB_TOKEN — no PAT needed because we stay inside the same
       # job and don't rely on a second workflow firing on the tag.
       - name: Create + push tag
-        if: steps.v.outputs.create == 'true'
+        if: steps.skip.outputs.skip != 'true' && steps.v.outputs.create == 'true'
         run: |
           set -euo pipefail
           TAG="${{ steps.v.outputs.tag }}"
@@ -133,6 +160,7 @@ jobs:
       # picks the version off `git describe --tags` on HEAD, so the tag
       # we just pushed (if any) is visible.
       - name: Run GoReleaser
+        if: steps.skip.outputs.skip != 'true'
         uses: goreleaser/goreleaser-action@v7
         with:
           version: latest
@@ -142,10 +170,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Always upload dist/ so a half-built release (or a snapshot
-      # run) still leaves binaries on the run page for download.
+      # Always upload dist/ on non-skipped runs so a half-built release
+      # (or a snapshot) still leaves binaries on the run page for
+      # download. `always()` + the skip gate together: run this even
+      # when an earlier step failed, but skip entirely on opt-outs.
       - name: Upload dist/ as workflow artifact
-        if: ${{ always() }}
+        if: ${{ always() && steps.skip.outputs.skip != 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: ailog-${{ steps.v.outputs.tag || github.sha }}
