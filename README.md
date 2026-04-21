@@ -7,7 +7,7 @@ Local, persistent log of AI prompts & responses. Captures every turn automatical
 ### macOS / Linux (one-liner)
 
 ```bash
-curl -sL https://raw.githubusercontent.com/khanakia/ai-logger/main/install.sh | sh
+curl -sL https://raw.githubusercontent.com/thesatellite-ai/ai-logger-go/main/install.sh | sh
 ```
 
 Auto-detects your OS + architecture, downloads the latest release, installs to `/usr/local/bin/ailog`.
@@ -15,7 +15,7 @@ Auto-detects your OS + architecture, downloads the latest release, installs to `
 ### Windows (PowerShell)
 
 ```powershell
-irm https://raw.githubusercontent.com/khanakia/ai-logger/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/thesatellite-ai/ai-logger-go/main/install.ps1 | iex
 ```
 
 Installs to `%LOCALAPPDATA%\ailog` and adds it to your user PATH.
@@ -24,14 +24,14 @@ Installs to `%LOCALAPPDATA%\ailog` and adds it to your user PATH.
 
 ### Manual install
 
-Grab a binary from the [Releases](https://github.com/khanakia/ai-logger/releases/latest) page and drop it in your `$PATH`.
+Grab a binary from the [Releases](https://github.com/thesatellite-ai/ai-logger-go/releases/latest) page and drop it in your `$PATH`.
 
 ### From source
 
 Requires Go 1.22+. Uses [Taskfile](https://taskfile.dev/) — `brew install go-task` if missing.
 
 ```bash
-git clone https://github.com/khanakia/ai-logger.git
+git clone https://github.com/thesatellite-ai/ai-logger-go.git
 cd ai-logger
 task install                     # → $GOPATH/bin/ailog
 ```
@@ -51,7 +51,7 @@ Restart Claude Code. Done — every prompt and response now logs automatically w
 If you already use [skills.sh](https://skills.sh/) to manage Claude Code skills, install ailog's skill from there:
 
 ```bash
-npx skills add khanakia/ai-logger
+npx skills add thesatellite-ai/ai-logger-go
 ```
 
 This pulls `skills/ailog/SKILL.md` from this repo into `~/.claude/skills/ailog/`. Equivalent to running `ailog skill install`. Use whichever fits your workflow — you only need one.

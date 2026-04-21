@@ -5,12 +5,12 @@
     Downloads and installs the latest ailog binary for Windows.
     Installs to $env:LOCALAPPDATA\ailog and adds it to the user PATH.
 .EXAMPLE
-    irm https://raw.githubusercontent.com/khanakia/ai-logger/main/install.ps1 | iex
+    irm https://raw.githubusercontent.com/thesatellite-ai/ai-logger-go/main/install.ps1 | iex
 #>
 
 $ErrorActionPreference = "Stop"
 
-$REPO = "khanakia/ai-logger"
+$REPO = "thesatellite-ai/ai-logger-go"
 $BINARY = "ailog"
 $INSTALL_DIR = Join-Path $env:LOCALAPPDATA "ailog"
 
