@@ -91,12 +91,17 @@ func newHooksInstallCmd() *cobra.Command {
 	var tool string
 	cmd := &cobra.Command{
 		Use:   "install",
-		Short: "Install hooks for a tool (default: claude-code)",
+		Short: "Install hooks for a tool (requires --tool)",
+		// Previously --tool defaulted to "claude-code", so `ailog hooks
+		// install` quietly edited ~/.claude/settings.json even if the
+		// user was actually trying to install hooks for a different
+		// tool. Make --tool required so cobra prints the usage block
+		// (which lists every known tool) when it's missing.
 		RunE: func(cmd *cobra.Command, args []string) error {
-			spec, ok := knownTools[tool]
-			if !ok {
-				return fmt.Errorf("unknown tool %q — try: %v", tool, knownToolNames())
+			if _, ok := knownTools[tool]; !ok {
+				return fmt.Errorf("unknown tool %q — available: %v", tool, knownToolNames())
 			}
+			spec := knownTools[tool]
 			switch spec.settings {
 			case "claude":
 				return installClaudeCodeHooks(cmd, spec)
@@ -105,7 +110,8 @@ func newHooksInstallCmd() *cobra.Command {
 			}
 		},
 	}
-	cmd.Flags().StringVar(&tool, "tool", "claude-code", "tool to install hooks for (claude-code, codex, opencode)")
+	cmd.Flags().StringVar(&tool, "tool", "", "tool to install hooks for (claude-code, codex, opencode)")
+	_ = cmd.MarkFlagRequired("tool")
 	return cmd
 }
 
