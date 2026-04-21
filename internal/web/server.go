@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"time"
 
@@ -67,6 +68,17 @@ func New(s *store.Store, addr string) *Server {
 func (s *Server) Run() error {
 	if err := s.srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("listen %s: %w", s.addr, err)
+	}
+	return nil
+}
+
+// RunListener serves on a pre-created listener. Use this when the
+// caller needs to control the bind (e.g. `:0` for OS-assigned ports)
+// and wants the listener handed to http.Server without a re-bind —
+// avoids the TOCTOU race of "probe then listen".
+func (s *Server) RunListener(l net.Listener) error {
+	if err := s.srv.Serve(l); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return fmt.Errorf("serve %s: %w", l.Addr().String(), err)
 	}
 	return nil
 }
