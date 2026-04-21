@@ -135,7 +135,7 @@ func TestStats_Counts(t *testing.T) {
 	id, _ := s.InsertEntry(ctx, store.InsertEntryInput{Tool: "cursor", Project: "a", Prompt: "p"})
 	_ = s.SetStarred(ctx, id, true)
 
-	st, err := s.ComputeStats(ctx)
+	st, err := s.ComputeStats(ctx, store.StatsRange{})
 	if err != nil {
 		t.Fatal(err)
 	}

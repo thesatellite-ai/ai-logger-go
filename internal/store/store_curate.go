@@ -104,8 +104,59 @@ type TokenWindow struct {
 // Total returns input+output (the number most people mean by "tokens").
 func (w TokenWindow) Total() int { return w.In + w.Out }
 
+// StatsRange narrows ComputeStats to a half-open [From, To) window.
+// Zero-value range (both fields zero) = no filter; every entry
+// participates, matching the pre-filter behavior.
+//
+// To is exclusive so a range like "all of 2026-04-21" can be expressed
+// as From=2026-04-21 00:00, To=2026-04-22 00:00 without any off-by-one
+// gymnastics at the boundary. The view layer converts user-supplied
+// YYYY-MM-DD values to midnight-local-time before handing them in.
+type StatsRange struct {
+	From time.Time
+	To   time.Time
+}
+
+// Empty reports whether the range is the zero value (no filter).
+func (r StatsRange) Empty() bool { return r.From.IsZero() && r.To.IsZero() }
+
+// ToInclusive returns the user-facing "end date" — the last day the
+// range includes (as opposed to the internal exclusive-end semantics).
+// parseStatsRange advances To by a day so [From, To) is easy to check;
+// this is the inverse for display. Returns the zero value when To is
+// unset.
+func (r StatsRange) ToInclusive() time.Time {
+	if r.To.IsZero() {
+		return time.Time{}
+	}
+	return r.To.AddDate(0, 0, -1)
+}
+
+// Includes reports whether t falls inside the range. An empty range
+// includes everything.
+func (r StatsRange) Includes(t time.Time) bool {
+	if r.Empty() {
+		return true
+	}
+	if !r.From.IsZero() && t.Before(r.From) {
+		return false
+	}
+	if !r.To.IsZero() && !t.Before(r.To) {
+		return false
+	}
+	return true
+}
+
 // Stats is a snapshot of the store for reporting. Time fields are
 // pointers so JSON-encoded output omits them when the DB is empty.
+//
+// When ComputeStats is called with a non-empty StatsRange, every
+// count + token map reflects ONLY rows in that range — the whole
+// shape stays the same, the numbers just reflect the filtered set.
+// The three fixed token windows (AllTime / 30Days / 7Days) are the
+// exception: they always describe their own named time span, not
+// the filtered range, because the range + a fixed window together
+// would be confusing.
 type Stats struct {
 	Total        int            `json:"total"`
 	Starred      int            `json:"starred"`
@@ -118,10 +169,21 @@ type Stats struct {
 
 	// Token usage over three time windows. Zero values when no
 	// entries carry usage data (non-Anthropic tools / pre-Tier-1
-	// captures).
+	// captures). Always computed against the full DB, regardless of
+	// any range filter — the named windows describe themselves.
 	TokensAllTime TokenWindow `json:"tokens_all_time"`
 	Tokens30Days  TokenWindow `json:"tokens_30d"`
 	Tokens7Days   TokenWindow `json:"tokens_7d"`
+
+	// TokensInRange is the usage window for the user-supplied
+	// StatsRange. Zero value when no range was requested; populated
+	// alongside Total when a range was supplied.
+	TokensInRange TokenWindow `json:"tokens_in_range"`
+
+	// Range echoes the filter back to the caller so the view can
+	// render "Selected range · From → To" without re-parsing the
+	// query params.
+	Range StatsRange `json:"range"`
 
 	// Per-group token aggregates — same TokenWindow shape, keyed by
 	// the grouping dimension. Populated alongside the count maps so
@@ -132,10 +194,22 @@ type Stats struct {
 	TokensByProject map[string]TokenWindow `json:"tokens_by_project"`
 }
 
-// ComputeStats aggregates simple counts across the whole DB.
-// One full scan; cheap until we hit ~100k entries.
-func (s *Store) ComputeStats(ctx context.Context) (Stats, error) {
+// ComputeStats aggregates simple counts across the DB, optionally
+// filtered to a StatsRange. Pass a zero-value range (`StatsRange{}`)
+// for the unfiltered full-DB numbers. One scan; cheap until ~100k
+// entries.
+//
+// Semantics when a range is supplied:
+//   - Total / Starred / BySession / FirstEntryAt / LastEntryAt /
+//     the ByX count maps / TokensByX maps / TokensInRange all reflect
+//     ONLY rows within the range.
+//   - TokensAllTime / Tokens30Days / Tokens7Days are independent of
+//     the range — the named windows describe themselves, so the view
+//     can show "this is the selected range" and "and for reference,
+//     here's what last 30d looked like" without semantic overlap.
+func (s *Store) ComputeStats(ctx context.Context, r StatsRange) (Stats, error) {
 	var st Stats
+	st.Range = r
 	st.ByTool = map[string]int{}
 	st.ByProject = map[string]int{}
 	st.ByModel = map[string]int{}
@@ -153,6 +227,28 @@ func (s *Store) ComputeStats(ctx context.Context) (Stats, error) {
 
 	sessions := map[string]struct{}{}
 	for _, e := range entries {
+		t := e.CreatedAt
+
+		// The three named token windows are always computed against
+		// the full DB — they describe "the last N days" regardless
+		// of any range filter.
+		if e.TokenCountIn > 0 || e.TokenCountOut > 0 ||
+			e.TokenCountCacheRead > 0 || e.TokenCountCacheCreate > 0 {
+			addToWindow(&st.TokensAllTime, e)
+			if t.After(d30) {
+				addToWindow(&st.Tokens30Days, e)
+			}
+			if t.After(d7) {
+				addToWindow(&st.Tokens7Days, e)
+			}
+		}
+
+		// Everything else is gated by the range filter (which passes
+		// everything through when empty).
+		if !r.Includes(t) {
+			continue
+		}
+
 		st.Total++
 		if e.Starred {
 			st.Starred++
@@ -166,7 +262,6 @@ func (s *Store) ComputeStats(ctx context.Context) (Stats, error) {
 		if e.SessionID != "" {
 			sessions[e.SessionID] = struct{}{}
 		}
-		t := e.CreatedAt
 		if st.FirstEntryAt == nil || t.Before(*st.FirstEntryAt) {
 			tt := t
 			st.FirstEntryAt = &tt
@@ -176,23 +271,14 @@ func (s *Store) ComputeStats(ctx context.Context) (Stats, error) {
 			st.LastEntryAt = &tt
 		}
 
-		// Token windows — only count when there's actual usage data,
-		// so TokenWindow.Entries reflects "entries WITH usage", not
-		// "all entries in this window". Useful context: lets the UI
-		// show "0 entries with token data" honestly when nothing's
-		// been captured with Tier 1 metadata yet.
 		if e.TokenCountIn > 0 || e.TokenCountOut > 0 ||
 			e.TokenCountCacheRead > 0 || e.TokenCountCacheCreate > 0 {
-			addToWindow(&st.TokensAllTime, e)
-			if t.After(d30) {
-				addToWindow(&st.Tokens30Days, e)
-			}
-			if t.After(d7) {
-				addToWindow(&st.Tokens7Days, e)
-			}
 			addToGroup(st.TokensByTool, toolKey, e)
 			addToGroup(st.TokensByModel, modelKey, e)
 			addToGroup(st.TokensByProject, projKey, e)
+			if !r.Empty() {
+				addToWindow(&st.TokensInRange, e)
+			}
 		}
 	}
 	st.BySession = len(sessions)

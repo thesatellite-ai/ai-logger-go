@@ -803,7 +803,14 @@
   }
   .rank-row {
     display: grid;
-    grid-template-columns: 2rem minmax(0, 1fr) 3rem 3.5rem 3.5rem 3.5rem 4rem auto;
+    /* Column widths — left to right:
+       rank(2) · label(flex) · count(3) · ↓in(3.5) · ↑out(3.5) ·
+       ⟳cache(5) · total(4) · dotviz(auto)
+       Cache gets extra room because cumulative cache-read tokens
+       routinely hit 10+ digits in compact form (e.g. "1707.3M").
+       `white-space: nowrap` on .rank-row__tok guarantees the value
+       never wraps even on the occasional overflow. */
+    grid-template-columns: 2rem minmax(0, 1fr) 3rem 3.5rem 3.5rem 5rem 4rem auto;
     align-items: center;
     gap: var(--space-3);
     padding-block: var(--space-2);
@@ -827,6 +834,10 @@
     font-size: var(--fs-xs);
     text-align: right;
     letter-spacing: var(--ls-tight, 0);
+    /* Token values are short (e.g. "↓ 1.7B"), but we never want them
+       to wrap into two lines inside a narrow grid track. Columns
+       stay rigid; values too wide to fit clip rather than wrap. */
+    white-space: nowrap;
   }
   .rank-row__tok--in    { color: var(--ink-3); }
   .rank-row__tok--out   { color: var(--ink-2); }
@@ -911,6 +922,85 @@
      styling and lets JS toggle column visibility via class on the
      parent table (.hide-col-X .col-X { display: none }). */
   .page-head > div { min-width: 0; }
+
+  /* ── /stats date-range picker ─────────────────────────────────────────
+     Lives on the right side of .page-head. Preset pills are plain <a>
+     tags; the custom-date disclosure is a <details> with a tiny GET
+     form so the whole picker works with zero JS. */
+  .range-picker {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+  }
+  .range-picker__presets {
+    display: inline-flex;
+    gap: 0;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    background: var(--surface);
+  }
+  .range-pill {
+    padding: 0.3rem 0.7rem;
+    color: var(--ink-3);
+    border-right: 1px solid var(--rule-soft);
+    transition: background var(--tx-fast), color var(--tx-fast);
+    text-decoration: none;
+    letter-spacing: var(--ls-wider);
+  }
+  .range-pill:last-child { border-right: 0; }
+  .range-pill:hover { background: var(--bg-tint); color: var(--ink); }
+  .range-pill--active {
+    background: var(--accent);
+    color: var(--surface);
+  }
+  .range-pill--active:hover { background: var(--accent); color: var(--surface); }
+  .range-picker__custom summary {
+    cursor: pointer;
+    padding: 0.3rem 0.7rem;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-md);
+    color: var(--ink-3);
+    background: var(--surface);
+    list-style: none;
+    user-select: none;
+  }
+  .range-picker__custom summary::-webkit-details-marker { display: none; }
+  .range-picker__custom[open] summary {
+    background: var(--bg-tint);
+    color: var(--ink);
+  }
+  .range-picker__form {
+    display: flex; align-items: center; gap: var(--space-2);
+    margin-top: var(--space-2);
+    padding: var(--space-3);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+  }
+  .range-picker__form label {
+    display: inline-flex; flex-direction: column; gap: 0.15rem;
+  }
+  .range-picker__form label span {
+    font-size: var(--fs-2xs);
+    letter-spacing: var(--ls-widest);
+    text-transform: uppercase;
+    color: var(--ink-4);
+  }
+  .range-picker__form input[type="date"] {
+    font-family: var(--font-mono);
+    font-size: var(--fs-xs);
+    padding: 0.25rem 0.4rem;
+    border: 1px solid var(--rule);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    color: var(--ink);
+    /* native date controls often set their own min-width too large */
+    min-width: 8.5rem;
+  }
 
   /* Lives just above .table-scroll inside the htmx-swappable region so
      the row count refreshes with every pagination / filter change. */

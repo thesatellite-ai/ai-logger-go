@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/khanakia/ai-logger/internal/store"
 	"github.com/spf13/cobra"
 )
 
@@ -19,7 +20,7 @@ func newStatsCmd() *cobra.Command {
 				return err
 			}
 			defer func() { _ = s.Close() }()
-			st, err := s.ComputeStats(ctx)
+			st, err := s.ComputeStats(ctx, store.StatsRange{})
 			if err != nil {
 				return err
 			}

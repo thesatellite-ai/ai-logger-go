@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 
+	"github.com/khanakia/ai-logger/internal/store"
 	"github.com/khanakia/ai-logger/internal/web/views"
 )
 
@@ -23,7 +24,7 @@ func (h *Handlers) List(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	stats, err := h.store.ComputeStats(ctx)
+	stats, err := h.store.ComputeStats(ctx, store.StatsRange{})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

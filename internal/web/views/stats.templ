@@ -8,41 +8,69 @@ import (
 	"github.com/khanakia/ai-logger/internal/store"
 )
 
-// Stats — the data sheet. Top: hero numbers. Next: token windows
-// (all-time / 30 days / 7 days). Middle: ranked tables by tool /
-// project / model with dot-grid mini-vis. Bottom: time range strip.
+// Stats — the data sheet. Top: range picker + hero numbers. Next:
+// token windows (all-time / 30 days / 7 days when no range; single
+// "Selected range" card otherwise). Middle: ranked tables by tool /
+// project / model with dot-grid mini-vis. Bottom: first/last entry.
+//
+// Every number on the page reflects the current filter: with a
+// non-empty Range, hero counts + rank tables re-aggregate against
+// [From, To). The three named windows always describe themselves —
+// they don't shift when a range is picked.
 templ Stats(s store.Stats) {
 	@Layout("Stats") {
 		<header class="page-head">
-			<h1 class="page-head__title">The <em>data sheet</em></h1>
-			<span class="page-head__sub">computed live</span>
+			<div>
+				<h1 class="page-head__title">The <em>data sheet</em></h1>
+				if s.Range.Empty() {
+					<span class="page-head__sub">computed live</span>
+				} else {
+					<span class="page-head__sub">{ rangeLabel(s.Range) } · { strconv.Itoa(s.Total) } entr{ entrySuffix(s.Total) }</span>
+				}
+			</div>
+			@rangePicker(s.Range)
 		</header>
 		<section class="stat-grid">
-			@statCard(strconv.Itoa(s.Total), "Total entries")
+			if s.Range.Empty() {
+				@statCard(strconv.Itoa(s.Total), "Total entries")
+			} else {
+				@statCard(strconv.Itoa(s.Total), "Entries in range")
+			}
 			@statCard(strconv.Itoa(s.BySession), "Distinct sessions")
 			@statCard(strconv.Itoa(s.Starred), "Starred")
 			@statCard(spanLabel(s.FirstEntryAt, s.LastEntryAt), "Span")
 		</section>
 		<h2 class="section-title">Token usage</h2>
 		<section class="stat-grid">
-			@tokenCard(s.TokensAllTime, "All time")
-			@tokenCard(s.Tokens30Days, "Last 30 days")
-			@tokenCard(s.Tokens7Days, "Last 7 days")
+			if s.Range.Empty() {
+				@tokenCard(s.TokensAllTime, "All time")
+				@tokenCard(s.Tokens30Days, "Last 30 days")
+				@tokenCard(s.Tokens7Days, "Last 7 days")
+			} else {
+				@tokenCard(s.TokensInRange, "Selected range: " + rangeLabel(s.Range))
+			}
 		</section>
-		<div class="stack stack-5">
-			<div class="data-sheet">
-				<div class="data-sheet__heading">By tool</div>
-				@rankList(s.ByTool, s.TokensByTool, s.Total)
+		if s.Total == 0 {
+			<div class="empty">
+				<p class="empty__quote">No entries in this range.</p>
+				<p class="empty__cite">— try widening the date window, or clearing it entirely</p>
 			</div>
-			<div class="data-sheet">
-				<div class="data-sheet__heading">By model</div>
-				@rankList(s.ByModel, s.TokensByModel, s.Total)
+		} else {
+			<div class="stack stack-5">
+				<div class="data-sheet">
+					<div class="data-sheet__heading">By tool</div>
+					@rankList(s.ByTool, s.TokensByTool, s.Total)
+				</div>
+				<div class="data-sheet">
+					<div class="data-sheet__heading">By model</div>
+					@rankList(s.ByModel, s.TokensByModel, s.Total)
+				</div>
+				<div class="data-sheet">
+					<div class="data-sheet__heading">By project</div>
+					@rankList(s.ByProject, s.TokensByProject, s.Total)
+				</div>
 			</div>
-			<div class="data-sheet">
-				<div class="data-sheet__heading">By project</div>
-				@rankList(s.ByProject, s.TokensByProject, s.Total)
-			</div>
-		</div>
+		}
 		<dl class="stat-range">
 			<div>
 				<dt>First entry</dt>
@@ -54,6 +82,46 @@ templ Stats(s store.Stats) {
 			</div>
 		</dl>
 	}
+}
+
+// rangePicker — preset pills + a <details> disclosure for custom dates.
+// All pills are plain <a> tags that rewrite the URL via GET params; no
+// JS, no htmx, fully bookmarkable. The "Custom…" link reveals two
+// native <input type="date"> inputs inside a GET form.
+templ rangePicker(r store.StatsRange) {
+	<div class="range-picker">
+		<div class="range-picker__presets">
+			@rangePill("/stats", "All time", r.Empty())
+			@rangePill(presetURL(1), "24h", rangeMatches(r, 1))
+			@rangePill(presetURL(7), "7d", rangeMatches(r, 7))
+			@rangePill(presetURL(30), "30d", rangeMatches(r, 30))
+			@rangePill(presetURL(90), "90d", rangeMatches(r, 90))
+		</div>
+		<details class="range-picker__custom" open?={ rangeIsCustom(r) }>
+			<summary>Custom…</summary>
+			<form method="get" action="/stats" class="range-picker__form">
+				<label>
+					<span>from</span>
+					<input type="date" name="from" value={ dateInputVal(r.From) }/>
+				</label>
+				<label>
+					<span>to</span>
+					<input type="date" name="to" value={ dateInputVal(r.ToInclusive()) }/>
+				</label>
+				<button type="submit" class="btn btn--sm">Apply</button>
+			</form>
+		</details>
+	</div>
+}
+
+// rangePill — one preset link. `active` styles the current selection.
+templ rangePill(href string, label string, active bool) {
+	<a
+		href={ templ.SafeURL(href) }
+		class={ "range-pill", templ.KV("range-pill--active", active) }
+	>
+		{ label }
+	</a>
 }
 
 templ statCard(value string, label string) {
@@ -207,4 +275,72 @@ func formatTimePtr(t *time.Time) string {
 		return "—"
 	}
 	return t.Local().Format("2006-01-02 15:04 MST")
+}
+
+// rangeLabel renders "2026-04-14 → 2026-04-21" for display. Handles
+// half-open ranges (only From or only To set) too, so a malformed URL
+// doesn't swallow the whole page.
+func rangeLabel(r store.StatsRange) string {
+	if r.Empty() {
+		return "all time"
+	}
+	end := r.ToInclusive()
+	switch {
+	case r.From.IsZero():
+		return "through " + end.Format("2006-01-02")
+	case r.To.IsZero():
+		return "from " + r.From.Format("2006-01-02")
+	default:
+		return r.From.Format("2006-01-02") + " → " + end.Format("2006-01-02")
+	}
+}
+
+// presetURL builds a /stats URL for the "last N days" preset. We use
+// today as the inclusive end and today-(N-1) as the inclusive start
+// so "7d" means "today + the 6 days before it" — a full week.
+func presetURL(days int) string {
+	now := time.Now()
+	end := now.Format("2006-01-02")
+	start := now.AddDate(0, 0, -(days - 1)).Format("2006-01-02")
+	return "/stats?from=" + start + "&to=" + end
+}
+
+// rangeMatches reports whether r is the "last N days" preset. Used to
+// style the active pill. Compares against today; a fixed range picked
+// earlier won't match the N-day preset of today's date even if the
+// spans are equal — correct behavior (it's not "the preset" anymore).
+func rangeMatches(r store.StatsRange, days int) bool {
+	if r.Empty() {
+		return false
+	}
+	now := time.Now()
+	wantEnd := now.Format("2006-01-02")
+	wantStart := now.AddDate(0, 0, -(days - 1)).Format("2006-01-02")
+	return r.From.Format("2006-01-02") == wantStart &&
+		r.ToInclusive().Format("2006-01-02") == wantEnd
+}
+
+// rangeIsCustom reports whether r is non-empty AND doesn't match any
+// of the named presets — in which case the Custom… disclosure should
+// render open so the user can see which dates are active.
+func rangeIsCustom(r store.StatsRange) bool {
+	if r.Empty() {
+		return false
+	}
+	for _, d := range []int{1, 7, 30, 90} {
+		if rangeMatches(r, d) {
+			return false
+		}
+	}
+	return true
+}
+
+// dateInputVal renders a time.Time as the YYYY-MM-DD value for an
+// <input type="date">. Empty string when the time is zero, so the
+// input stays unfilled.
+func dateInputVal(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.Format("2006-01-02")
 }
