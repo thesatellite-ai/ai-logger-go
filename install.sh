@@ -2,14 +2,14 @@
 # ailog installer for macOS / Linux.
 #
 # Usage:
-#   curl -sL https://raw.githubusercontent.com/khanakia/ai-logger/main/install.sh | sh
+#   curl -sL https://raw.githubusercontent.com/thesatellite-ai/ai-logger-go/main/install.sh | sh
 #
 # Detects your OS + architecture, downloads the latest released binary
 # from GitHub Releases, and installs it to /usr/local/bin.
 
 set -e
 
-REPO="khanakia/ai-logger"
+REPO="thesatellite-ai/ai-logger-go"
 BINARY="ailog"
 INSTALL_DIR="/usr/local/bin"
 
