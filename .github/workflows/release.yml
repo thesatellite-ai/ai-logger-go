@@ -1,41 +1,51 @@
 name: Release
 
-# Three trigger paths:
+# Four ways this fires, ordered by ease:
 #
-#   push tag (v*)              → full release, published to GitHub Releases.
-#                                Natural "cut a release" flow: bump a version,
-#                                tag, push → release appears on the sidebar.
+#   1. push to main            → auto-bump patch, tag, release.
+#                                The zero-friction path. Commit with
+#                                `[skip release]` in the message to opt
+#                                out for docs / workflow-only changes.
 #
-#   workflow_dispatch, tag=""  → snapshot build. GoReleaser runs with
-#                                --snapshot, no GitHub Release is created,
-#                                but cross-compiled archives are uploaded as
-#                                a workflow artifact you can download from
-#                                the run page. Use for ad-hoc binaries off
-#                                an arbitrary branch.
+#   2. push tag v*             → use the pushed tag, release as-is.
+#                                Use this to bump minor or major
+#                                (e.g. `git tag -a v0.3.0 && git push
+#                                origin v0.3.0`). The workflow skips
+#                                the auto-bump step when it sees the
+#                                tag on the ref.
 #
-#   workflow_dispatch, tag=v*  → create + push the tag on the current ref,
-#                                then run the full release. Saves the
-#                                "tag + push" step when running from the
-#                                Actions UI. Fails if the tag already exists.
+#   3. workflow_dispatch, tag=X → create+push the tag on the current
+#                                ref, then release. Same as path 2 but
+#                                run from the Actions UI.
+#
+#   4. workflow_dispatch, tag="" → snapshot build. dist/ uploaded as a
+#                                workflow artifact, no GitHub Release.
+#                                Ad-hoc binaries off an arbitrary branch.
+#
+# No PAT is needed. GitHub Actions does NOT re-fire workflows on tag
+# pushes made by the default GITHUB_TOKEN, so the auto-tag step below
+# creates the tag and then continues to the GoReleaser step in the
+# same job — no loop, no cross-workflow dance.
 on:
   push:
-    tags:
-      - "v*"
+    branches: [main]
+    tags: ["v*"]
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag (e.g. v0.2.0). Leave empty for snapshot build.'
+        description: 'Release tag (e.g. v0.3.0). Empty = snapshot build.'
         required: false
         type: string
 
-# `contents: write` — lets GoReleaser create the GitHub Release via the
-# built-in GITHUB_TOKEN, and lets the tag-creation step push a new tag.
 permissions:
   contents: write
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    # `[skip release]` in the commit subject/body opts this run out.
+    # workflow_dispatch always runs because inputs are intentional.
+    if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[skip release]') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -47,43 +57,98 @@ jobs:
         with:
           go-version-file: go.mod
 
-      # Only runs on workflow_dispatch when a tag input is provided.
-      # Creates + pushes the tag so the GoReleaser step below sees it.
-      - name: Create + push tag
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.tag != '' }}
+      # Resolve the release tag for this run from the four trigger
+      # paths above. Writes three outputs:
+      #   tag:      the version string (empty on snapshot)
+      #   create:   "true" if we need to `git tag && git push`
+      #   snapshot: "true" if GoReleaser should use --snapshot
+      - name: Resolve release tag
+        id: v
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
+          event="${{ github.event_name }}"
+          ref="${{ github.ref }}"
+          input_tag="${{ inputs.tag }}"
+
+          if [ "$event" = "push" ] && [[ "$ref" == refs/tags/* ]]; then
+            # Path 2 — tag push
+            tag="${ref#refs/tags/}"
+            echo "tag=$tag"        >> "$GITHUB_OUTPUT"
+            echo "create=false"    >> "$GITHUB_OUTPUT"
+            echo "snapshot=false"  >> "$GITHUB_OUTPUT"
+            echo "mode: tag-push ($tag)"
+          elif [ "$event" = "workflow_dispatch" ] && [ -n "$input_tag" ]; then
+            # Path 3 — dispatch with tag input
+            echo "tag=$input_tag"  >> "$GITHUB_OUTPUT"
+            echo "create=true"     >> "$GITHUB_OUTPUT"
+            echo "snapshot=false"  >> "$GITHUB_OUTPUT"
+            echo "mode: dispatch-with-tag ($input_tag)"
+          elif [ "$event" = "workflow_dispatch" ]; then
+            # Path 4 — dispatch without tag = snapshot
+            echo "tag="            >> "$GITHUB_OUTPUT"
+            echo "create=false"    >> "$GITHUB_OUTPUT"
+            echo "snapshot=true"   >> "$GITHUB_OUTPUT"
+            echo "mode: dispatch-snapshot"
+          else
+            # Path 1 — push to main, auto-bump patch.
+            latest=$(git tag -l 'v*' --sort=-v:refname | head -n1 || true)
+            if [ -z "$latest" ]; then
+              next="v0.1.0"
+            else
+              base="${latest#v}"
+              # Split on dots. Strip any prerelease suffix (-rc.1, etc.)
+              # so we always bump the main triple, never chain patches
+              # onto a prerelease.
+              core="${base%%-*}"
+              major="${core%%.*}"
+              rest="${core#*.}"
+              minor="${rest%%.*}"
+              patch="${rest#*.}"
+              next="v${major}.${minor}.$((patch + 1))"
+            fi
+            echo "tag=$next"       >> "$GITHUB_OUTPUT"
+            echo "create=true"     >> "$GITHUB_OUTPUT"
+            echo "snapshot=false"  >> "$GITHUB_OUTPUT"
+            echo "mode: push-to-main auto-bump ($latest -> $next)"
+          fi
+
+      # Create + push the computed tag (paths 1 + 3). Uses the default
+      # GITHUB_TOKEN — no PAT needed because we stay inside the same
+      # job and don't rely on a second workflow firing on the tag.
+      - name: Create + push tag
+        if: steps.v.outputs.create == 'true'
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.v.outputs.tag }}"
+          git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git rev-parse -q --verify "refs/tags/${{ inputs.tag }}" >/dev/null; then
-            echo "::error::tag ${{ inputs.tag }} already exists"
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "::error::tag $TAG already exists"
             exit 1
           fi
-          git tag -a "${{ inputs.tag }}" -m "${{ inputs.tag }}"
-          git push origin "${{ inputs.tag }}"
+          git tag -a "$TAG" -m "$TAG"
+          git push origin "$TAG"
 
-      # Full release on push-tag + workflow_dispatch-with-tag. Snapshot
-      # only when workflow_dispatch was used WITHOUT a tag — a push-tag
-      # event must always be a real release.
+      # Full release for paths 1/2/3, --snapshot for path 4. GoReleaser
+      # picks the version off `git describe --tags` on HEAD, so the tag
+      # we just pushed (if any) is visible.
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v7
         with:
           version: latest
           args: >-
             release --clean
-            ${{ (github.event_name == 'workflow_dispatch' && inputs.tag == '') && '--snapshot' || '' }}
+            ${{ steps.v.outputs.snapshot == 'true' && '--snapshot' || '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # dist/ uploaded for every run — redundant on real releases (easy
-      # to grab from the Releases page) but required for snapshot runs.
-      # always() runs even on failure so a half-built release still
-      # leaves a trail to debug.
+      # Always upload dist/ so a half-built release (or a snapshot
+      # run) still leaves binaries on the run page for download.
       - name: Upload dist/ as workflow artifact
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: ailog-${{ inputs.tag || github.ref_name }}
+          name: ailog-${{ steps.v.outputs.tag || github.sha }}
           path: dist/
           if-no-files-found: warn
           retention-days: 30
