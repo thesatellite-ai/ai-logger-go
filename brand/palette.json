@@ -1,0 +1,18 @@
+{
+  "name": "ailog",
+  "tile": [
+    "#FB923C",
+    "#EA580C"
+  ],
+  "accent": "#22D3EE",
+  "fg": "#FFFFFF",
+  "dark": [
+    "#C2410C",
+    "#431407"
+  ],
+  "light": [
+    "#FFF7ED",
+    "#FFEDD5"
+  ],
+  "glyphAccent": "#0891B2"
+}
