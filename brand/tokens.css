@@ -1,0 +1,9 @@
+:root{
+  --ailog-tile-a:#FB923C; --ailog-tile-b:#EA580C;
+  --ailog-accent:#22D3EE; --ailog-fg:#FFFFFF;
+  --ailog-font-display:'Space Grotesk', 'Geist', ui-sans-serif, system-ui, sans-serif;
+  --ailog-font-sans:'Inter', ui-sans-serif, system-ui, sans-serif;
+  --ailog-font-mono:'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --ailog-radius:16px;
+}
+[data-theme="dark"], .dark{ --ailog-bg:#431407; --ailog-fg:#FFF7ED; }

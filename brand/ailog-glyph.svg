@@ -1,0 +1,11 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="ailog glyph">
+  <line x1="142" y1="158" x2="142" y2="354" stroke="#C2410C" stroke-width="20" stroke-linecap="round"/>
+  <g fill="#C2410C">
+    <circle cx="142" cy="158" r="20"/>
+    <circle cx="142" cy="354" r="20"/>
+    <rect x="196" y="138" width="206" height="40" rx="20"/>
+    <rect x="196" y="236" width="166" height="40" rx="20"/>
+    <rect x="196" y="334" width="186" height="40" rx="20"/>
+  </g>
+  <circle cx="142" cy="256" r="23" fill="#0891B2"/>
+</svg>

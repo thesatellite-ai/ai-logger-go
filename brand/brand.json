@@ -1,0 +1,28 @@
+{
+  "name": "ailog",
+  "tagline": "A local, searchable log of every AI prompt.",
+  "description": "ailog captures every prompt and response automatically across Claude Code, OpenAI Codex, and opencode — tagged with project, git branch, tool, model, and token usage, and kept locally in SQLite + FTS5. Search all your AI conversations across every project, tool, and machine. No cloud, no telemetry.",
+  "repo": "thesatellite-ai/ai-logger-go",
+  "homepage": "",
+  "language": "go",
+  "kind": "cli",
+  "license": "Apache-2.0",
+  "author": { "name": "khanakia", "github": "khanakia" },
+  "brand": {
+    "concept": "timeline-log",
+    "color": "orange",
+    "tile": ["#FB923C", "#EA580C"],
+    "fg": "#FFFFFF",
+    "accent": "#22D3EE",
+    "radius": 112
+  },
+  "fonts": { "display": "Space Grotesk", "sans": "Inter", "mono": "JetBrains Mono" },
+  "topics": ["ai", "ai-agents", "claude-code", "codex", "logging", "prompt-engineering", "cli", "sqlite", "local-first", "developer-tools", "search", "golang"],
+  "install": {
+    "script": "curl -sL https://raw.githubusercontent.com/thesatellite-ai/ai-logger-go/main/install.sh | sh"
+  },
+  "khanakia": {
+    "addToApps": true,
+    "badges": ["open-source", "free", "new"]
+  }
+}
