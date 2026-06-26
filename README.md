@@ -1,8 +1,36 @@
-# ailog
+<p align="center">
+  <img src="brand/png/icon-512.png" alt="ailog logo — a timeline of captured prompts" width="60" height="60">
+</p>
+
+<h1 align="center">ailog</h1>
+
+<p align="center"><strong>A local, searchable log of every AI prompt.</strong></p>
+
+<p align="center">An open-source, local-first CLI that automatically logs and full-text-searches every AI coding prompt &amp; response — across Claude Code, OpenAI Codex, and opencode, every project and every machine — in SQLite. No cloud, no telemetry.</p>
+
+<p align="center">
+  <a href="https://github.com/thesatellite-ai/ai-logger-go/releases"><img src="https://img.shields.io/github/v/release/thesatellite-ai/ai-logger-go?sort=semver&label=release&color=EA580C" alt="Release"></a>
+  <img src="https://img.shields.io/badge/built%20with-Go-00ADD8?logo=go&logoColor=white" alt="Built with Go">
+  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-EA580C" alt="Platforms: macOS, Linux, Windows">
+  <img src="https://img.shields.io/badge/data-100%25%20local-EA580C" alt="100% local data">
+  <a href="https://github.com/thesatellite-ai/ai-logger-go/stargazers"><img src="https://img.shields.io/github/stars/thesatellite-ai/ai-logger-go?style=social" alt="GitHub stars"></a>
+</p>
 
 Local, persistent log of AI prompts & responses. Captures every turn
 automatically across Claude Code, OpenAI Codex, and opencode. Searches
 across all your projects, all your time.
+
+- [Why you'd want this](#why-youd-want-this)
+- [ailog vs the alternatives](#ailog-vs-the-alternatives)
+- [Install](#install)
+- [First-time setup](#first-time-setup)
+- [Daily use](#daily-use)
+- [Other AI tools](#other-ai-tools)
+- [Privacy](#privacy)
+- [FAQ](#faq)
+- [Uninstall](#uninstall)
+- [Build from source](#build-from-source)
+- [Release](#release)
 
 ## Why you'd want this
 
@@ -59,6 +87,21 @@ reading what you wrote three months ago.
   workflows, and the specific problems each feature solves
 - **[docs/USAGE.md](./docs/USAGE.md)** — full CLI reference, every
   command, every flag, with examples
+
+## ailog vs the alternatives
+
+You're probably "logging" your AI work today by scrolling up, hitting the shell's reverse-search, or pasting into a notes file. None of those survive across tools, projects, and machines — and none search the *responses*.
+
+| | **ailog** | Terminal scrollback | Shell history | Cloud chat history |
+|---|:---:|:---:|:---:|:---:|
+| Survives closing the session | ✅ | ❌ | ⚠️ commands only | ✅ |
+| Full-text search of prompts **and** responses | ✅ | ⚠️ | ❌ | ⚠️ |
+| Spans every tool (Claude Code / Codex / opencode) | ✅ | ❌ | ❌ | ❌ |
+| Spans every project + machine | ✅ | ❌ | ⚠️ | ⚠️ |
+| Per-turn metadata (tokens, cost, branch, model) | ✅ | ❌ | ❌ | ⚠️ |
+| 100% local — no cloud, no telemetry | ✅ | ✅ | ✅ | ❌ |
+| Auto-capture (nothing to remember) | ✅ | n/a | ✅ | ✅ |
+| Secrets scrubbed before storage | ✅ | ❌ | ❌ | ❌ |
 
 ## Install
 
@@ -174,6 +217,29 @@ ailog add --tool cursor --session $ID --prompt "..."
 - Built-in secret scrubber catches AWS keys, GitHub/OpenAI/Anthropic tokens, Slack tokens, JWTs, private-key blocks before storage. Escape hatch: `ailog add --no-redact`.
 - `ailog redact <id>` scrubs an entry after the fact. `ailog purge --before <date>` hard-deletes old history.
 
+## FAQ
+
+**Does ailog send my prompts anywhere?**
+No. Everything is stored in a local SQLite database (`~/.ailog/log.db`, `0600`, in a `0700` dir). There is no network, no cloud, and no telemetry.
+
+**Which tools does it capture?**
+Claude Code automatically via live hooks; OpenAI Codex and opencode via `ailog import` (and adapters as their hook schemas ship). Any other tool can be logged with `ailog add --tool <name>`.
+
+**Do I have to remember to log anything?**
+No. Once `ailog hooks install --tool claude-code` is set up, every prompt and response is captured with project, git, and session context automatically.
+
+**Will it store my secrets?**
+No. A built-in scrubber redacts AWS keys, GitHub/OpenAI/Anthropic tokens, Slack webhooks, JWTs, and PEM private keys *before* anything is written to disk. You can also `ailog redact <id>` after the fact or `ailog purge --before <date>`.
+
+**Can my AI agent search my own history?**
+Yes. `ailog skill install` (or via [skills.sh](https://skills.sh/)) adds a Claude Code skill so the agent can recall past prompts on demand.
+
+**Where is my data and how is it searched?**
+In SQLite with an FTS5 full-text index at `~/.ailog/log.db`. `ailog search` queries prompts and responses with filters for project, tool, branch, session, and time.
+
+**Does it sync across machines?**
+ailog is deliberately local — no built-in cloud sync. The database is a single file, so you can copy or sync `~/.ailog/log.db` yourself if you want it on multiple machines.
+
 ## Uninstall
 
 ### macOS / Linux
@@ -214,3 +280,5 @@ git push origin v0.1.0
 ```
 
 GitHub Actions runs GoReleaser, builds binaries for all 6 OS/arch targets, and publishes the release with checksums.
+
+<sub><strong>ailog</strong> — open-source, local-first CLI that auto-logs and full-text-searches every AI coding prompt &amp; response across Claude Code, OpenAI Codex, and opencode. Searchable prompt history in SQLite. No cloud, no telemetry.</sub>
