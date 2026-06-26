@@ -1,0 +1,18 @@
+# ailog
+
+> A local, searchable log of every AI prompt. ailog captures every prompt and response automatically across Claude Code, OpenAI Codex, and opencode — tagged with project, git branch, tool, model, and token usage, and kept locally in SQLite + FTS5. No cloud, no telemetry.
+
+ailog is open source (thesatellite-ai/ai-logger-go). Everything runs locally; nothing is sent to the cloud.
+
+## Docs
+- [README](https://github.com/thesatellite-ai/ai-logger-go/blob/main/README.md): overview, install, usage
+- [USE-CASES](https://github.com/thesatellite-ai/ai-logger-go/blob/main/docs/USE-CASES.md): scenarios and workflows
+- [USAGE](https://github.com/thesatellite-ai/ai-logger-go/blob/main/docs/USAGE.md): full CLI reference
+- [CHANGELOG](https://github.com/thesatellite-ai/ai-logger-go/blob/main/CHANGELOG.md): release history
+
+## Install
+- Script (macOS/Linux): `curl -sL https://raw.githubusercontent.com/thesatellite-ai/ai-logger-go/main/install.sh | sh`
+- Releases: https://github.com/thesatellite-ai/ai-logger-go/releases
+
+## Links
+- Repository: https://github.com/thesatellite-ai/ai-logger-go
