@@ -322,6 +322,15 @@ func (Entry) Fields() []ent.Field {
 		// Immutable() prevents updates, but Create accepts an explicit
 		// SetCreatedAt(t) — that's how backfill keeps historical dates.
 		field.Time("created_at").Default(time.Now).Immutable(),
+
+		// When the agent wrote this turn into its transcript, as the
+		// transcript records it. NULL for a row only a live hook wrote.
+		// Source:
+		//   [imp]  every imported row (same instant as created_at)
+		//   [link] a live-hook row the importer matched to its transcript
+		//          turn keeps its own capture created_at and gets this
+		//          (internal/importer, hook-row claim)
+		field.Time("transcript_at").Optional().Nillable(),
 	}
 }
 

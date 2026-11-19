@@ -163,7 +163,7 @@ ailog import all            # all of the above
 ailog import claude-code --from ~/.claude-work   # only one home
 ```
 
-Transcripts are found and read through [agentio](https://github.com/ubgo/agentio). Per-message dedup keys plus per-transcript watermarks and read cursors make re-runs idempotent and cheap: a grown transcript is read from where the last run stopped. Rows imported by older ailog versions are recognised, never written twice. See [docs/USAGE.md](./docs/USAGE.md) for `--strict`, `--force`, `--since` and the drift-detection mechanism.
+Transcripts are found and read through [agentio](https://github.com/ubgo/agentio). Per-message dedup keys plus per-transcript watermarks and read cursors make re-runs idempotent and cheap: a grown transcript is read from where the last run stopped. Rows imported by older ailog versions are recognised, and a turn a live hook already logged is linked to that row instead of stored again; `ailog dedupe` merges the duplicates older versions left. See [docs/USAGE.md](./docs/USAGE.md) for `--strict`, `--force`, `--since` and the drift-detection mechanism.
 
 ### Skill install via [skills.sh](https://skills.sh/) (alternative)
 

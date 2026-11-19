@@ -79,6 +79,9 @@ type InsertEntryInput struct {
 	// (time.Now) wins. Backfill paths (importer) set it from the source
 	// transcript so historical entries land at their original timestamps.
 	CreatedAt *time.Time
+	// TranscriptAt is when the agent wrote the turn into its transcript
+	// (imports); nil for a live-hook row.
+	TranscriptAt *time.Time
 }
 
 // AttachResponseInput carries the rich set of per-turn metadata a Stop
@@ -212,6 +215,9 @@ func (s *Store) InsertEntry(ctx context.Context, in InsertEntryInput) (string, e
 		SetToolVersion(in.ToolVersion)
 	if in.CreatedAt != nil {
 		create = create.SetCreatedAt(*in.CreatedAt)
+	}
+	if in.TranscriptAt != nil {
+		create = create.SetTranscriptAt(*in.TranscriptAt)
 	}
 	_, err := create.
 		SetCwd(in.CWD).

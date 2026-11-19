@@ -75,6 +75,7 @@ type EntryMutation struct {
 	starred                     *bool
 	notes                       *string
 	created_at                  *time.Time
+	transcript_at               *time.Time
 	clearedFields               map[string]struct{}
 	done                        bool
 	oldValue                    func(context.Context) (*Entry, error)
@@ -1529,6 +1530,55 @@ func (m *EntryMutation) ResetCreatedAt() {
 	m.created_at = nil
 }
 
+// SetTranscriptAt sets the "transcript_at" field.
+func (m *EntryMutation) SetTranscriptAt(t time.Time) {
+	m.transcript_at = &t
+}
+
+// TranscriptAt returns the value of the "transcript_at" field in the mutation.
+func (m *EntryMutation) TranscriptAt() (r time.Time, exists bool) {
+	v := m.transcript_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTranscriptAt returns the old "transcript_at" field's value of the Entry entity.
+// If the Entry object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *EntryMutation) OldTranscriptAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTranscriptAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTranscriptAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTranscriptAt: %w", err)
+	}
+	return oldValue.TranscriptAt, nil
+}
+
+// ClearTranscriptAt clears the value of the "transcript_at" field.
+func (m *EntryMutation) ClearTranscriptAt() {
+	m.transcript_at = nil
+	m.clearedFields[entry.FieldTranscriptAt] = struct{}{}
+}
+
+// TranscriptAtCleared returns if the "transcript_at" field was cleared in this mutation.
+func (m *EntryMutation) TranscriptAtCleared() bool {
+	_, ok := m.clearedFields[entry.FieldTranscriptAt]
+	return ok
+}
+
+// ResetTranscriptAt resets all changes to the "transcript_at" field.
+func (m *EntryMutation) ResetTranscriptAt() {
+	m.transcript_at = nil
+	delete(m.clearedFields, entry.FieldTranscriptAt)
+}
+
 // Where appends a list predicates to the EntryMutation builder.
 func (m *EntryMutation) Where(ps ...predicate.Entry) {
 	m.predicates = append(m.predicates, ps...)
@@ -1563,7 +1613,7 @@ func (m *EntryMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *EntryMutation) Fields() []string {
-	fields := make([]string, 0, 34)
+	fields := make([]string, 0, 35)
 	if m.tool != nil {
 		fields = append(fields, entry.FieldTool)
 	}
@@ -1666,6 +1716,9 @@ func (m *EntryMutation) Fields() []string {
 	if m.created_at != nil {
 		fields = append(fields, entry.FieldCreatedAt)
 	}
+	if m.transcript_at != nil {
+		fields = append(fields, entry.FieldTranscriptAt)
+	}
 	return fields
 }
 
@@ -1742,6 +1795,8 @@ func (m *EntryMutation) Field(name string) (ent.Value, bool) {
 		return m.Notes()
 	case entry.FieldCreatedAt:
 		return m.CreatedAt()
+	case entry.FieldTranscriptAt:
+		return m.TranscriptAt()
 	}
 	return nil, false
 }
@@ -1819,6 +1874,8 @@ func (m *EntryMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldNotes(ctx)
 	case entry.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
+	case entry.FieldTranscriptAt:
+		return m.OldTranscriptAt(ctx)
 	}
 	return nil, fmt.Errorf("unknown Entry field %s", name)
 }
@@ -2066,6 +2123,13 @@ func (m *EntryMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetCreatedAt(v)
 		return nil
+	case entry.FieldTranscriptAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTranscriptAt(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Entry field %s", name)
 }
@@ -2170,7 +2234,11 @@ func (m *EntryMutation) AddField(name string, value ent.Value) error {
 // ClearedFields returns all nullable fields that were cleared during this
 // mutation.
 func (m *EntryMutation) ClearedFields() []string {
-	return nil
+	var fields []string
+	if m.FieldCleared(entry.FieldTranscriptAt) {
+		fields = append(fields, entry.FieldTranscriptAt)
+	}
+	return fields
 }
 
 // FieldCleared returns a boolean indicating if a field with the given name was
@@ -2183,6 +2251,11 @@ func (m *EntryMutation) FieldCleared(name string) bool {
 // ClearField clears the value of the field with the given name. It returns an
 // error if the field is not defined in the schema.
 func (m *EntryMutation) ClearField(name string) error {
+	switch name {
+	case entry.FieldTranscriptAt:
+		m.ClearTranscriptAt()
+		return nil
+	}
 	return fmt.Errorf("unknown Entry nullable field %s", name)
 }
 
@@ -2291,6 +2364,9 @@ func (m *EntryMutation) ResetField(name string) error {
 		return nil
 	case entry.FieldCreatedAt:
 		m.ResetCreatedAt()
+		return nil
+	case entry.FieldTranscriptAt:
+		m.ResetTranscriptAt()
 		return nil
 	}
 	return fmt.Errorf("unknown Entry field %s", name)

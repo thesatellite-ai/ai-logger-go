@@ -84,49 +84,113 @@ func TestImportLines_Keys(t *testing.T) {
 	}
 }
 
-func TestLatestTurnAndFindImported(t *testing.T) {
+// TestSessionRows_ZonesAndLinks: hook rows are stamped in the local zone,
+// imported rows in UTC; SessionRows orders them by instant, uses the
+// transcript time when known, and marks rows an import key points at.
+func TestSessionRows_ZonesAndLinks(t *testing.T) {
 	ctx := context.Background()
 	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "log.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = st.Close() }()
-	t0 := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
-	ins := func(prompt string, at time.Time) string {
-		id, err := st.InsertEntry(ctx, store.InsertEntryInput{Tool: "codex", SessionID: "s1", Prompt: prompt, CreatedAt: &at})
-		if err != nil {
-			t.Fatal(err)
-		}
-		return id
-	}
-	a := ins("first", t0)
-	b := ins("second", t0.Add(time.Minute))
-	if err := st.AttachResponse(ctx, store.AttachResponseInput{EntryID: a, Response: "one"}); err != nil {
+	ist := time.FixedZone("IST", 5*3600+1800)
+	hookAt := time.Date(2026, 9, 1, 19, 44, 56, 0, ist) // 14:14:56 UTC
+	importAt := time.Date(2026, 9, 1, 14, 0, 0, 0, time.UTC)
+	hook, _ := st.InsertEntry(ctx, store.InsertEntryInput{Tool: "claude-code", SessionID: "s1", Prompt: "late", CreatedAt: &hookAt})
+	imp, _ := st.InsertEntry(ctx, store.InsertEntryInput{Tool: "claude-code", SessionID: "s1", Prompt: "early", CreatedAt: &importAt, TranscriptAt: &importAt})
+	if _, err := st.InsertEntry(ctx, store.InsertEntryInput{Tool: "codex", SessionID: "s1", Prompt: "other tool"}); err != nil {
 		t.Fatal(err)
 	}
-	if id, resp, ok, _ := st.LatestTurn(ctx, "codex", "s1", t0.Add(30*time.Second)); !ok || id != a || resp != "one" {
-		t.Fatalf("latest before b = %q %q %v", id, resp, ok)
+	if err := st.ImportLineRecord(ctx, "k1", "/f", imp); err != nil {
+		t.Fatal(err)
 	}
-	if id, resp, ok, _ := st.LatestTurn(ctx, "codex", "s1", time.Time{}); !ok || id != b || resp != "" {
-		t.Fatalf("latest = %q %q %v", id, resp, ok)
+	rows, err := st.SessionRows(ctx, "claude-code", "s1")
+	if err != nil || len(rows) != 2 {
+		t.Fatalf("rows = %+v, %v", rows, err)
 	}
-	if _, _, ok, _ := st.LatestTurn(ctx, "claude-code", "s1", time.Time{}); ok {
-		t.Fatal("another tool's session matched")
+	if rows[0].ID != imp || rows[1].ID != hook || !rows[0].Linked || rows[1].Linked {
+		t.Fatalf("order or links wrong: %+v", rows)
 	}
-	if _, _, ok, _ := st.LatestTurn(ctx, "codex", "s1", t0.Add(-time.Hour)); ok {
-		t.Fatal("an entry newer than the answer matched")
+	if rows[1].TranscriptAt != nil || !rows[1].At().Equal(hookAt) || !rows[0].At().Equal(importAt) {
+		t.Fatalf("times: %+v", rows)
 	}
-	if id, ok, _ := st.FindImportedEntry(ctx, store.ImportedTurn{Tool: "codex", SessionID: "s1", CreatedAt: t0, Prompt: "first"}); !ok || id != a {
-		t.Fatalf("find = %q %v", id, ok)
+}
+
+func TestFillEmpty_NeverOverwrites(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "log.db"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, miss := range []store.ImportedTurn{
-		{Tool: "codex", SessionID: "s1", CreatedAt: t0, Prompt: "other"},
-		{Tool: "codex", SessionID: "s1", CreatedAt: t0.Add(time.Second), Prompt: "first"},
-		{Tool: "codex", SessionID: "", CreatedAt: t0, Prompt: "first"},
-		{Tool: "codex", SessionID: "s1", Prompt: "first"},
-	} {
-		if _, ok, _ := st.FindImportedEntry(ctx, miss); ok {
-			t.Errorf("matched %+v", miss)
-		}
+	defer func() { _ = st.Close() }()
+	id, _ := st.InsertEntry(ctx, store.InsertEntryInput{Tool: "claude-code", SessionID: "s", Prompt: "q", PermissionMode: "plan", TokensIn: 5})
+	at := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	changed, err := st.FillEmpty(ctx, id, store.FillInput{PermissionMode: "default", TokensIn: 9, TokensOut: 3, Response: "a", Model: "m", TranscriptAt: &at})
+	if err != nil || !changed {
+		t.Fatalf("fill: %v %v", changed, err)
+	}
+	e, _ := st.GetByID(ctx, id)
+	if e.PermissionMode != "plan" || e.TokenCountIn != 5 || e.TokenCountOut != 3 || e.Response != "a" || e.Model != "m" || e.TranscriptAt == nil {
+		t.Fatalf("entry = %+v", e)
+	}
+	if changed, _ := st.FillEmpty(ctx, id, store.FillInput{Response: "b", Model: "n"}); changed {
+		t.Fatal("second fill overwrote")
+	}
+	hits, _ := st.Search(ctx, "a", store.SearchFilter{})
+	if len(hits) == 0 {
+		t.Fatal("filled response not searchable")
+	}
+}
+
+func TestMergeIntoAndBackup(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	st, err := store.Open(ctx, filepath.Join(dir, "log.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	hook, _ := st.InsertEntry(ctx, store.InsertEntryInput{Tool: "claude-code", SessionID: "s", Prompt: "same", Terminal: "ghostty"})
+	at := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	imp, _ := st.InsertEntry(ctx, store.InsertEntryInput{Tool: "claude-code", SessionID: "s", Prompt: "same", Response: "ans", Terminal: "x", CreatedAt: &at})
+	child, _ := st.InsertEntry(ctx, store.InsertEntryInput{Tool: "claude-code", SessionID: "s", Prompt: "next", ParentEntryID: imp})
+	_ = st.ImportLineRecord(ctx, "k", "/f", imp)
+	if d, _ := st.DuplicateSessions(ctx); len(d) != 1 || d[0] != [2]string{"claude-code", "s"} {
+		t.Fatalf("duplicate sessions = %v", d)
+	}
+	backup := filepath.Join(dir, "copy.db")
+	if err := st.BackupTo(ctx, backup); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.BackupTo(ctx, backup); err == nil {
+		t.Fatal("backup overwrote an existing file")
+	}
+	if err := st.MergeInto(ctx, imp, hook); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.MergeInto(ctx, hook, hook); err == nil {
+		t.Fatal("merge into itself accepted")
+	}
+	e, _ := st.GetByID(ctx, hook)
+	if e.Response != "ans" || e.Terminal != "ghostty" || e.TranscriptAt == nil || !e.TranscriptAt.Equal(at) {
+		t.Fatalf("merged = %+v", e)
+	}
+	if id, ok, _ := st.ImportLineEntry(ctx, "k"); !ok || id != hook {
+		t.Fatalf("key not moved: %q", id)
+	}
+	if c, _ := st.GetByID(ctx, child); c.ParentEntryID != hook {
+		t.Fatalf("child parent = %q", c.ParentEntryID)
+	}
+	if _, err := st.GetByID(ctx, imp); err == nil {
+		t.Fatal("merged row not deleted")
+	}
+	copyStore, err := store.Open(ctx, backup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = copyStore.Close() }()
+	if _, err := copyStore.GetByID(ctx, imp); err != nil {
+		t.Fatal("backup does not hold the pre-merge rows")
 	}
 }

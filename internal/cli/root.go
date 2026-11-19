@@ -41,6 +41,7 @@ func NewRootCmd() *cobra.Command {
 		newPurgeCmd(),
 		newSkillCmd(),
 		newHooksCmd(),
+		newDedupeCmd(),
 		newHookCmd(),
 		newUICmd(),
 		newDebugCmd(),

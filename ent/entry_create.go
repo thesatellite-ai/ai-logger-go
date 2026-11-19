@@ -496,6 +496,20 @@ func (_c *EntryCreate) SetNillableCreatedAt(v *time.Time) *EntryCreate {
 	return _c
 }
 
+// SetTranscriptAt sets the "transcript_at" field.
+func (_c *EntryCreate) SetTranscriptAt(v time.Time) *EntryCreate {
+	_c.mutation.SetTranscriptAt(v)
+	return _c
+}
+
+// SetNillableTranscriptAt sets the "transcript_at" field if the given value is not nil.
+func (_c *EntryCreate) SetNillableTranscriptAt(v *time.Time) *EntryCreate {
+	if v != nil {
+		_c.SetTranscriptAt(*v)
+	}
+	return _c
+}
+
 // SetID sets the "id" field.
 func (_c *EntryCreate) SetID(v string) *EntryCreate {
 	_c.mutation.SetID(v)
@@ -954,6 +968,10 @@ func (_c *EntryCreate) createSpec() (*Entry, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(entry.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
+	}
+	if value, ok := _c.mutation.TranscriptAt(); ok {
+		_spec.SetField(entry.FieldTranscriptAt, field.TypeTime, value)
+		_node.TranscriptAt = &value
 	}
 	return _node, _spec
 }
