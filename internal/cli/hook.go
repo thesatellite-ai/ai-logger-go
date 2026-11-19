@@ -232,25 +232,63 @@ func scanTranscriptOnce(path string) transcriptMeta {
 	return last
 }
 
-// hookDebug appends one line per hook invocation to ~/.ailog/hook.log.
-// The log captures the raw stdin payload + an extra status string so we
-// can debug "no entries appearing" without instrumenting the harness.
-// Disable with `AILOG_HOOK_DEBUG=0`.
+// Hook debug log settings. The log is OFF unless AILOG_HOOK_DEBUG=1:
+// hook payloads carry full prompt text, so ailog must not keep a copy
+// of them by default (an always-on log once grew to 179 MB of raw
+// prompts). When enabled, payloads are redacted before writing and the
+// file rotates so it cannot grow without bound.
+const (
+	hookDebugEnv     = "AILOG_HOOK_DEBUG"
+	hookDebugOn      = "1"
+	hookLogName      = "hook.log"
+	hookLogRotated   = hookLogName + ".1" // the single kept rotation
+	hookLogMaxBytes  = 10 << 20           // rotate once hook.log reaches 10 MiB
+	hookLogFilePerm  = 0o600
+	hookLogDirPerm   = 0o700
+	hookLogTimestamp = time.RFC3339Nano
+)
+
+// hookLogMax is the rotation threshold; a variable so tests can use a
+// small value instead of writing 10 MiB.
+var hookLogMax int64 = hookLogMaxBytes
+
+// hookDebugEnabled reports whether AILOG_HOOK_DEBUG=1 is set.
+func hookDebugEnabled() bool { return os.Getenv(hookDebugEnv) == hookDebugOn }
+
+// hookDebug appends one line per hook invocation to ~/.ailog/hook.log
+// when AILOG_HOOK_DEBUG=1, to debug "no entries appearing" without
+// instrumenting the harness. The payload is passed through
+// redact.Scrub first (the same scrubber the stored prompts use), and
+// the file rotates to hook.log.1 at hookLogMax, keeping one old file.
 func hookDebug(event string, payload []byte, extra string) {
-	if os.Getenv("AILOG_HOOK_DEBUG") == "0" {
+	if !hookDebugEnabled() {
 		return
 	}
 	home, err := config.Home()
 	if err != nil {
 		return
 	}
-	_ = os.MkdirAll(home, 0o700)
-	f, err := os.OpenFile(filepath.Join(home, "hook.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	_ = os.MkdirAll(home, hookLogDirPerm)
+	path := filepath.Join(home, hookLogName)
+	line := fmt.Sprintf("%s  %s  %s  %s\n", time.Now().Format(hookLogTimestamp), event,
+		redact.Scrub(extra), redact.Scrub(string(payload)))
+	rotateHookLog(path, int64(len(line)))
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, hookLogFilePerm)
 	if err != nil {
 		return
 	}
 	defer func() { _ = f.Close() }()
-	fmt.Fprintf(f, "%s  %s  %s  %s\n", time.Now().Format(time.RFC3339Nano), event, extra, string(payload))
+	_, _ = f.WriteString(line)
+}
+
+// rotateHookLog renames path to path.1 (replacing any older rotation)
+// when appending incoming bytes would take it past hookLogMax.
+func rotateHookLog(path string, incoming int64) {
+	info, err := os.Stat(path)
+	if err != nil || info.Size() == 0 || info.Size()+incoming <= hookLogMax {
+		return
+	}
+	_ = os.Rename(path, filepath.Join(filepath.Dir(path), hookLogRotated))
 }
 
 // firstNonEmptyS returns the first non-empty string in vs, or "" if none.

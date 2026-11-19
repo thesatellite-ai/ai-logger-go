@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -88,80 +87,87 @@ func ailogCommand() (string, error) {
 }
 
 func newHooksInstallCmd() *cobra.Command {
-	var tool string
+	var (
+		tool   string
+		dryRun bool
+	)
 	cmd := &cobra.Command{
 		Use:   "install",
 		Short: "Install hooks for a tool (requires --tool)",
+		Long: `Install ailog's hooks for a tool.
+
+For claude-code this merges into ~/.claude/settings.json: ailog adds its
+own UserPromptSubmit and Stop entries and leaves every other hook, key
+and formatting byte as it was. Running it again changes nothing. The
+previous file is saved as settings.json.bak-<timestamp> before any write.
+Use --dry-run to print the diff without writing.`,
 		// Previously --tool defaulted to "claude-code", so `ailog hooks
 		// install` quietly edited ~/.claude/settings.json even if the
 		// user was actually trying to install hooks for a different
 		// tool. Make --tool required so cobra prints the usage block
 		// (which lists every known tool) when it's missing.
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if _, ok := knownTools[tool]; !ok {
+			spec, ok := knownTools[tool]
+			if !ok {
 				return fmt.Errorf("unknown tool %q — available: %v", tool, knownToolNames())
 			}
-			spec := knownTools[tool]
 			switch spec.settings {
 			case "claude":
-				return installClaudeCodeHooks(cmd, spec)
+				return installClaudeCodeHooks(cmd, spec, dryRun)
 			default:
 				return printManualInstructions(cmd, spec)
 			}
 		},
 	}
 	cmd.Flags().StringVar(&tool, "tool", "", "tool to install hooks for (claude-code, codex, opencode)")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the settings diff without writing")
 	_ = cmd.MarkFlagRequired("tool")
 	return cmd
 }
 
-func installClaudeCodeHooks(cmd *cobra.Command, spec toolHookSpec) error {
+// installClaudeCodeHooks merges ailog's hooks into Claude Code's
+// settings.json (see planClaudeInstall). It never replaces another
+// tool's hook, writes nothing when ailog's entries are already there,
+// and backs the file up before writing.
+func installClaudeCodeHooks(cmd *cobra.Command, spec toolHookSpec, dryRun bool) error {
 	path, err := config.ClaudeSettingsPath()
 	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
 	bin, err := ailogCommand()
 	if err != nil {
 		return err
 	}
-
-	settings := map[string]any{}
-	if b, err := os.ReadFile(path); err == nil {
-		_ = json.Unmarshal(b, &settings)
-	}
-	hooks, _ := settings["hooks"].(map[string]any)
-	if hooks == nil {
-		hooks = map[string]any{}
-	}
-	for event, sub := range spec.events {
-		hooks[event] = []any{
-			map[string]any{
-				"hooks": []any{
-					map[string]any{
-						"type":    "command",
-						"command": fmt.Sprintf("%s hook %s", bin, sub),
-					},
-				},
-			},
-		}
-	}
-	settings["hooks"] = hooks
-
-	out, err := json.MarshalIndent(settings, "", "  ")
+	before, existed, err := readSettings(path)
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(path, out, 0o644); err != nil {
+	after, added, err := planClaudeInstall(before, bin, spec.events)
+	if err != nil {
+		return fmt.Errorf("%s: %w (file left unchanged)", path, err)
+	}
+	out := cmd.OutOrStdout()
+	if len(added) == 0 {
+		fmt.Fprintf(out, "%s hooks already installed in %s — nothing to change\n", spec.name, path)
+		return nil
+	}
+	if dryRun {
+		writeLineDiff(out, path, before, after)
+		fmt.Fprintf(out, "\ndry run: would add %s (nothing written)\n", strings.Join(added, ", "))
+		return nil
+	}
+	backup, err := writeSettings(path, before, after, existed)
+	if err != nil {
 		return err
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "installed %s hooks → %s\n", spec.name, path)
-	for event, sub := range spec.events {
-		fmt.Fprintf(cmd.OutOrStdout(), "  %-20s → ailog hook %s\n", event, sub)
+	fmt.Fprintf(out, "installed %s hooks → %s\n", spec.name, path)
+	for _, event := range added {
+		fmt.Fprintf(out, "  %-20s → ailog hook %s\n", event, spec.events[event])
 	}
-	fmt.Fprintln(cmd.OutOrStdout(), "\nRestart your Claude Code session for hooks to take effect.")
+	if backup != "" {
+		fmt.Fprintf(out, "backup: %s\n", backup)
+	}
+	fmt.Fprintln(out, "\nRestart your Claude Code session for hooks to take effect.")
 	return nil
 }
 
@@ -172,15 +178,18 @@ func printManualInstructions(cmd *cobra.Command, spec toolHookSpec) error {
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "%s — no settings.json auto-installer yet.\n\n", spec.name)
 	fmt.Fprintln(cmd.OutOrStdout(), "Wire the following commands into whatever hook mechanism the tool exposes:")
-	for event, sub := range spec.events {
-		fmt.Fprintf(cmd.OutOrStdout(), "  on %s:\n    %s hook %s\n", event, bin, sub)
+	for _, event := range sortedEvents(spec.events) {
+		fmt.Fprintf(cmd.OutOrStdout(), "  on %s:\n    %s\n", event, hookCommandLine(bin, spec.events[event]))
 	}
 	fmt.Fprintln(cmd.OutOrStdout(), "\nBoth commands read JSON from stdin. See `ailog hook", spec.name, "--help`.")
 	return nil
 }
 
 func newHooksUninstallCmd() *cobra.Command {
-	var tool string
+	var (
+		tool   string
+		dryRun bool
+	)
 	cmd := &cobra.Command{
 		Use:   "uninstall",
 		Short: "Remove hooks installed by `ailog hooks install`",
@@ -197,134 +206,43 @@ func newHooksUninstallCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			b, err := os.ReadFile(path)
+			bin, err := ailogCommand()
 			if err != nil {
 				return err
 			}
-			settings := map[string]any{}
-			if err := json.Unmarshal(b, &settings); err != nil {
-				return err
-			}
-
-			// Surgical removal: keep every hook entry that isn't ours.
-			// Matching on the substring "ailog hook" catches every
-			// command the install writes regardless of which binary
-			// path is current. If a user hand-wires a different tool
-			// into the same event, their entry survives.
-			removed := 0
-			if hooks, ok := settings["hooks"].(map[string]any); ok {
-				for event := range spec.events {
-					raw, present := hooks[event]
-					if !present {
-						continue
-					}
-					groups, ok := raw.([]any)
-					if !ok {
-						continue
-					}
-					kept, n := filterAilogHookGroups(groups)
-					removed += n
-					if len(kept) == 0 {
-						delete(hooks, event)
-					} else {
-						hooks[event] = kept
-					}
-				}
-				if len(hooks) == 0 {
-					delete(settings, "hooks")
-				} else {
-					settings["hooks"] = hooks
-				}
-			}
-
-			out, err := json.MarshalIndent(settings, "", "  ")
+			before, existed, err := readSettings(path)
 			if err != nil {
 				return err
 			}
-			if err := os.WriteFile(path, out, 0o644); err != nil {
-				return err
+			// Surgical removal: only commands that are ailog's own
+			// (`<path>/ailog hook <tool> <event>`) go; other hooks on the
+			// same events, other events and other keys keep their bytes.
+			after, removed, err := planClaudeUninstall(before, bin, spec.events)
+			if err != nil {
+				return fmt.Errorf("%s: %w (file left unchanged)", path, err)
 			}
+			out := cmd.OutOrStdout()
 			if removed == 0 {
-				fmt.Fprintf(cmd.OutOrStdout(), "no %s hooks to remove (nothing in %s matched `ailog hook`)\n", spec.name, path)
-			} else {
-				fmt.Fprintf(cmd.OutOrStdout(), "removed %d %s hook entr%s from %s (non-ailog hooks preserved)\n",
-					removed, spec.name, pluralEntries(removed), path)
+				fmt.Fprintf(out, "no %s hooks to remove (nothing in %s matched `ailog hook`)\n", spec.name, path)
+				return nil
 			}
+			if dryRun {
+				writeLineDiff(out, path, before, after)
+				fmt.Fprintf(out, "\ndry run: would remove %d entr%s (nothing written)\n", removed, pluralEntries(removed))
+				return nil
+			}
+			backup, err := writeSettings(path, before, after, existed)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(out, "removed %d %s hook entr%s from %s (non-ailog hooks preserved)\nbackup: %s\n",
+				removed, spec.name, pluralEntries(removed), path, backup)
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&tool, "tool", "claude-code", "tool to uninstall hooks for")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "print the settings diff without writing")
 	return cmd
-}
-
-// filterAilogHookGroups walks the nested hook-group structure Claude
-// uses and drops only the command entries that look like `ailog hook
-// …`. Groups whose `hooks` array is emptied out are dropped whole so
-// the settings file doesn't grow vestigial group wrappers.
-//
-// Shape walked (example):
-//
-//	hooks:
-//	  UserPromptSubmit:
-//	    - hooks:
-//	        - type: command
-//	          command: "/abs/path/to/ailog hook claude-code prompt"
-//	        - type: command
-//	          command: "/some/other/tool --flag"      # kept
-//
-// Returns the kept groups and the count of command entries dropped.
-func filterAilogHookGroups(groups []any) ([]any, int) {
-	kept := groups[:0]
-	removed := 0
-	for _, g := range groups {
-		group, ok := g.(map[string]any)
-		if !ok {
-			kept = append(kept, g) // unexpected shape; leave it alone
-			continue
-		}
-		inner, ok := group["hooks"].([]any)
-		if !ok {
-			kept = append(kept, g)
-			continue
-		}
-		keptInner := inner[:0]
-		for _, h := range inner {
-			entry, ok := h.(map[string]any)
-			if !ok {
-				keptInner = append(keptInner, h)
-				continue
-			}
-			cmdStr, _ := entry["command"].(string)
-			if isAilogHookCommand(cmdStr) {
-				removed++
-				continue
-			}
-			keptInner = append(keptInner, h)
-		}
-		if len(keptInner) == 0 {
-			// All hooks in this group were ours; drop the group.
-			continue
-		}
-		group["hooks"] = keptInner
-		kept = append(kept, group)
-	}
-	// Return a freshly-allocated slice so we don't alias the caller's
-	// backing array if they kept a reference.
-	out := make([]any, len(kept))
-	copy(out, kept)
-	return out, removed
-}
-
-// isAilogHookCommand reports whether a settings.json command string
-// was written by `ailog hooks install`. Matches the `ailog hook`
-// substring — includes the trailing space so an unrelated tool called
-// `ailog-hook-thing` wouldn't match by accident. The install always
-// writes `%s hook %s` (binary + literal " hook " + adapter name).
-func isAilogHookCommand(cmd string) bool {
-	if cmd == "" {
-		return false
-	}
-	return strings.Contains(cmd, " hook ") && strings.Contains(cmd, "ailog")
 }
 
 // pluralEntries returns "y" for 1 entry and "ies" otherwise so the
