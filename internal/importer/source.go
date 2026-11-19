@@ -21,7 +21,6 @@
 package importer
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"time"
@@ -57,8 +56,10 @@ type Record struct {
 	Model       string    // assistant model id
 	StopReason  string    // assistant stop reason
 	Timestamp   time.Time // transcript timestamp (zero = unknown)
-	// LineHash is the SHA-256 hex of the record's bytes (recordKey): the
-	// dedup key every row imported so far carries.
+	// LineHash is the SHA-256 hex of the record's bytes (agentio Turn.Raw:
+	// a JSONL line without its terminator, the bytes older ailog hashed
+	// from bufio.ScanLines; an opencode message file as stored): the dedup
+	// key every row imported so far carries.
 	LineHash string
 	// MsgKey is the message-id dedup key; "" when the format has no id.
 	MsgKey string
@@ -114,7 +115,7 @@ func recordOf(a agents.Agent, t agents.Transcript, turn agentio.Turn, ann agents
 		r.SessionName = t.Title
 	}
 	if len(turn.Raw) > 0 {
-		r.LineHash = recordKey(turn.Raw, a.WholeRecordKey)
+		r.LineHash = hashBytes(turn.Raw)
 	}
 	if turn.ID != "" {
 		r.MsgKey = msgKeyPrefix + a.Tool + ":" + r.SessionID + ":" + turn.ID
@@ -137,19 +138,6 @@ func recordOf(a agents.Agent, t agents.Transcript, turn agentio.Turn, ann agents
 // usage with its answers, so a transcript whose answers all lack it most
 // likely means the vendor renamed the usage fields.
 func anchor(r Record) bool { return r.Role == RoleAssistant && r.TokensIn > 0 }
-
-// recordKey is the legacy dedup key of a record: the SHA-256 hex of its
-// bytes as older ailog read them. For a JSONL line that is the line
-// without its terminator (bufio.ScanLines drops "\n" and a trailing
-// "\r"); agentio's Turn.Raw keeps the terminator for some agents (Claude)
-// and not for others (Codex), so it is cut here. whole hashes raw as is
-// (opencode's one-file-per-message records).
-func recordKey(raw []byte, whole bool) string {
-	if !whole {
-		raw = bytes.TrimRight(raw, "\r\n")
-	}
-	return hashBytes(raw)
-}
 
 // hashBytes is the SHA-256 hex of b.
 func hashBytes(b []byte) string {

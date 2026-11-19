@@ -223,8 +223,6 @@ func (Entry) Fields() []ent.Field {
 		//          {"line_hash":"…","opencode.provider_id":"openai",
 		//           "opencode.agent":"build","opencode.mode":"build",
 		//           "opencode.project_id":"global","opencode.cost_usd":0.00119}
-		//          ("codex.personality" only on rows imported before
-		//          ailog read Codex through agentio.)
 		//          Renderers should treat raw as opaque unless they need
 		//          the namespaced extras.
 		field.Text("raw").Default(""),

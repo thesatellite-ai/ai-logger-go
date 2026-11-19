@@ -15,9 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Imports read a grown transcript from where the last run stopped (`import_state.read_offset`, added to an existing `log.db` on open); the Stop hook reads only what the turn appended.
 ### Changed
 - Every agent's homes, transcripts, hook payloads and hook installation now come from [agentio](https://github.com/ubgo/agentio); ailog's own transcript parsers and settings editor are gone. Rows already in `log.db` are recognised by the same line-hash keys (no duplicates); new rows also get message-id keys.
-- Settings backups are named `<file>.agentio-bak-<timestamp>` (was `<file>.bak-<timestamp>`). `hooks install --dry-run` prints the plan (present / add) instead of a line diff.
+- Settings backups are named `<file>.agentio-bak-<timestamp>` (was `<file>.bak-<timestamp>`). `hooks install --dry-run` prints the plan (replace / present / add) instead of a line diff.
 - `hooks install` replaces an ailog entry that runs another ailog binary with one running this binary, instead of adding a second entry.
 - `import --from` names an agent home (`~/.claude-work`); an older root such as `~/.claude/projects` still works.
+- An undecodable transcript line is skipped with a warning instead of ending the read of that file.
 - Codex commentary messages are never stored as answers; an answer whose token count is not yet written is stored on the next run, with its usage.
 ### Deprecated
 ### Removed

@@ -29,10 +29,6 @@ func codexAgent(c *codex.Agent) Agent {
 		Tool:      ToolCodex,
 		Neutral:   n,
 		TestedMax: codex.TestedMax,
-		homeAt: func(dir string) (agentio.Home, error) {
-			h, err := c.HomeAt(dir)
-			return h.Neutral(), err
-		},
 		transcripts: func(ctx context.Context, h agentio.Home) ([]Transcript, error) {
 			_, out, err := conversationTranscripts(ctx, n, h, read)
 			for i := range out {
@@ -47,9 +43,10 @@ func codexAgent(c *codex.Agent) Agent {
 // codexState is what the session_meta and turn_context records in effect
 // at a point of a rollout say.
 type codexState struct {
-	originator, source, provider              string
-	approval, sandbox, timezone, mode, effort string
-	network, networkSet                       bool
+	originator, source, provider string
+	approval, sandbox, timezone  string
+	mode, effort, persona        string
+	network, networkSet          bool
 }
 
 // codexSnapshot is the state from time at on.
@@ -128,6 +125,7 @@ type codexCollab struct {
 func (st *codexState) applyTurnContext(tc *codex.TurnContext) {
 	st.approval = firstSet(string(tc.ApprovalPolicy), st.approval)
 	st.timezone = firstSet(tc.Timezone, st.timezone)
+	st.persona = firstSet(string(tc.Personality), st.persona)
 	if tc.SandboxPolicy != nil && tc.SandboxPolicy.Type != "" {
 		st.sandbox = string(tc.SandboxPolicy.Type)
 		st.network, st.networkSet = tc.SandboxPolicy.NetworkAccess, true
@@ -152,6 +150,7 @@ func (st codexState) annotation() Annotation {
 	add("sandbox_type", st.sandbox)
 	add("collab_mode", st.mode)
 	add("reasoning_effort", st.effort)
+	add("personality", st.persona)
 	add("timezone", st.timezone)
 	if st.networkSet {
 		m[codexExtraPrefix+"network_access"] = st.network

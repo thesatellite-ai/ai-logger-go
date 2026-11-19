@@ -207,6 +207,35 @@ func TestClaude_SubagentMetaWithoutTranscriptSkipped(t *testing.T) {
 	}
 }
 
+// TestClaude_SubagentWithoutMetaListed: a subagent transcript Claude Code
+// wrote no .meta.json for is still a transcript of its conversation.
+func TestClaude_SubagentWithoutMetaListed(t *testing.T) {
+	home := allHomes(t)
+	tf.Write(t, home, ".claude/projects/-work-alice/"+tf.ClaudeSession+"/subagents/agent-old.jsonl",
+		`{"type":"user","uuid":"o-u1","sessionId":"`+tf.ClaudeSession+`","cwd":"/work/alice","timestamp":"2026-03-01T10:00:05.000Z","version":"2.1.100","message":{"role":"user","content":"Old subagent prompt."}}`+"\n")
+	a, _ := registry(t).ByTool(agents.ToolClaude)
+	keys, turns := readAll(t, a)
+	if len(keys) != 4 || !slices.Contains(turns, "user:Old subagent prompt.") {
+		t.Fatalf("keys %v turns %q", keys, turns)
+	}
+}
+
+// TestGemini_TurnsCarryDir: Gemini turns name the project folder.
+func TestGemini_TurnsCarryDir(t *testing.T) {
+	allHomes(t)
+	a, _ := registry(t).ByTool(agents.ToolGemini)
+	hs, _ := a.Homes()
+	ts, _ := a.Transcripts(context.Background(), hs[0])
+	if _, err := ts[0].Turns(0, func(tu agentio.Turn) error {
+		if tu.Dir != "/work/alice" {
+			t.Errorf("%s turn dir = %q", tu.ID, tu.Dir)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestCodexAnnotator(t *testing.T) {
 	allHomes(t)
 	a, _ := registry(t).ByTool(agents.ToolCodex)
@@ -226,7 +255,7 @@ func TestCodexAnnotator(t *testing.T) {
 	}
 	want := map[string]any{
 		"codex.model_provider": "openai", "codex.sandbox_type": "workspace-write", "codex.collab_mode": "default",
-		"codex.reasoning_effort": "medium", "codex.timezone": "UTC", "codex.network_access": false,
+		"codex.reasoning_effort": "medium", "codex.timezone": "UTC", "codex.network_access": false, "codex.personality": "pragmatic",
 	}
 	for k, v := range want {
 		if got.Extras[k] != v {

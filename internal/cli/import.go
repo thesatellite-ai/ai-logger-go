@@ -166,8 +166,11 @@ func buildImportOptions(f importFlags, cmd *cobra.Command) (importer.Options, er
 // count is appended only when non-zero so healthy runs stay quiet.
 func printImportStats(cmd *cobra.Command, name string, st importer.Stats) {
 	tail := ""
+	if st.BadLines > 0 {
+		tail += fmt.Sprintf(" — %d undecodable line(s) skipped", st.BadLines)
+	}
 	if st.FilesSuspect > 0 {
-		tail = fmt.Sprintf(" — drift watch: %d suspect file(s)", st.FilesSuspect)
+		tail += fmt.Sprintf(" — drift watch: %d suspect file(s)", st.FilesSuspect)
 	}
 	fmt.Fprintf(cmd.OutOrStdout(),
 		"%s: %d home(s), %d files (%d skipped via watermark) — %d records (%d skipped, %d new prompts, %d responses attached, %d standalone)%s\n",

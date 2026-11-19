@@ -108,6 +108,20 @@ func TestHooksInstall_UpgradesOldEntries(t *testing.T) {
 		[]string{"'/Applications/My Tools/ailog' hook claude-code stop"})
 	before := read(t, path)
 
+	dry, _, err := runCLI(t, "", "hooks", "install", "--tool", "claude-code", "--dry-run")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"replace UserPromptSubmit     /Users/alice/go/bin/ailog hook claude-code prompt",
+		"replace Stop                 '/Applications/My Tools/ailog' hook claude-code stop"} {
+		if !strings.Contains(dry, want) {
+			t.Fatalf("dry run does not show %q:\n%s", want, dry)
+		}
+	}
+	if strings.Contains(dry, "runbay-hook") || read(t, path) != before {
+		t.Fatalf("dry run lists a foreign hook as replaced or wrote the file:\n%s", dry)
+	}
+
 	out, _, err := runCLI(t, "", "hooks", "install", "--tool", "claude-code")
 	if err != nil {
 		t.Fatal(err)

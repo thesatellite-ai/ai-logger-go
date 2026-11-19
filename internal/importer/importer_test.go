@@ -380,6 +380,30 @@ func TestRun_IncrementalFromCursor(t *testing.T) {
 	}
 }
 
+// TestRun_UndecodableLinesSkipped: a torn or foreign line in a transcript
+// is reported and skipped; every turn around it is still imported.
+func TestRun_UndecodableLinesSkipped(t *testing.T) {
+	e := newEnv(t)
+	cx := strings.Split(strings.TrimSpace(tf.CodexLegacy()), "\n")
+	cx = append(cx[:3], append([]string{"garbage line"}, cx[3:]...)...)
+	tf.CodexHome(t, e.home, map[string]string{tf.CodexLegacyID: strings.Join(cx, "\n") + "\n"}, tf.CodexLegacyID)
+	cl := tf.ClaudeLines()
+	tf.Write(t, e.home, ".claude/settings.json", "{}")
+	tf.Write(t, e.home, ".claude/projects/-work-alice/"+tf.ClaudeSession+".jsonl", cl[0]+"\n{not json\n"+cl[2]+"\n")
+	for _, c := range []struct {
+		tool     string
+		inserted int
+		attached int
+	}{{agents.ToolCodex, 2, 2}, {agents.ToolClaude, 1, 1}} {
+		e.out.Reset()
+		s := e.run(t, c.tool, Options{})
+		if s.BadLines != 1 || s.Inserted != c.inserted || s.Attached != c.attached ||
+			!strings.Contains(e.out.String(), "skipped an undecodable line") {
+			t.Fatalf("%s: stats %+v\n%s", c.tool, s, e.out.String())
+		}
+	}
+}
+
 func TestRun_ShrunkTranscriptReadFromStart(t *testing.T) {
 	e := newEnv(t)
 	main := tf.ClaudeHome(t, e.home)

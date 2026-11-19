@@ -118,11 +118,7 @@ func hookAgent(tool string) (agents.Agent, agentio.HookInstaller, error) {
 // else the agent's default home when none exists yet.
 func hookHomes(ag agents.Agent, dir string) ([]agentio.Home, error) {
 	if dir != "" {
-		h, err := ag.HomeAt(expandUser(dir))
-		if err != nil {
-			return nil, err
-		}
-		return []agentio.Home{h}, nil
+		return []agentio.Home{ag.HomeAt(expandUser(dir))}, nil
 	}
 	hs, err := ag.Homes()
 	if err != nil {
@@ -225,7 +221,8 @@ this binary. Use --dry-run to print the plan without writing.`,
 
 // installHooksIn installs ailog's hooks into one home: older ailog entries
 // running another binary are removed first (their own backup), then the
-// missing entries are appended (another backup). A dry run only plans.
+// missing entries are appended (another backup). A dry run only plans and
+// prints both.
 func installHooksIn(out io.Writer, ag agents.Agent, h agentio.HookInstaller, home agentio.Home, bin string, dryRun bool) error {
 	want := wantedHooks(bin, ag.Tool)
 	current := map[string]bool{}
@@ -236,19 +233,23 @@ func installHooksIn(out io.Writer, ag agents.Agent, h agentio.HookInstaller, hom
 	if err != nil {
 		return fmt.Errorf("%s: %w (file left unchanged)", home.Dir(), err)
 	}
+	// Older ailog entries of this tool that run another binary: replaced,
+	// so the agent never runs two.
+	isStale := func(cmd string) bool {
+		return isAilogHook(cmd, ag.Tool) && !current[strings.TrimSpace(cmd)]
+	}
+	stale := plan.Matching(isStale)
 	if dryRun {
-		printHookPlan(out, ag.Tool, plan)
-		fmt.Fprintln(out, "dry run: nothing written (an older ailog entry running another binary would also be replaced)")
+		printHookPlan(out, ag.Tool, plan, stale)
+		fmt.Fprintln(out, "dry run: nothing written")
 		return nil
 	}
-	stale, b, err := h.RemoveHooks(home, func(cmd string) bool {
-		return isAilogHook(cmd, ag.Tool) && !current[strings.TrimSpace(cmd)]
-	})
-	if err != nil {
-		return fmt.Errorf("%s: %w", plan.File, err)
-	}
-	if stale > 0 {
-		fmt.Fprintf(out, "replaced %d older ailog hook entr%s in %s\n", stale, pluralEntries(stale), plan.File)
+	if len(stale) > 0 {
+		n, b, err := h.RemoveHooks(home, isStale)
+		if err != nil {
+			return fmt.Errorf("%s: %w", plan.File, err)
+		}
+		fmt.Fprintf(out, "replaced %d older ailog hook entr%s in %s\n", n, pluralEntries(n), plan.File)
 		printBackup(out, b)
 		if plan, err = h.PlanHooks(home, want); err != nil {
 			return fmt.Errorf("%s: %w", home.Dir(), err)
@@ -259,7 +260,7 @@ func installHooksIn(out io.Writer, ag agents.Agent, h agentio.HookInstaller, hom
 		printManual(out, plan)
 		return nil
 	}
-	b, err = h.ApplyHooks(plan)
+	b, err := h.ApplyHooks(plan)
 	if err != nil {
 		return fmt.Errorf("%s: %w", plan.File, err)
 	}
@@ -272,9 +273,13 @@ func installHooksIn(out io.Writer, ag agents.Agent, h agentio.HookInstaller, hom
 	return nil
 }
 
-// printHookPlan prints what a plan would add and what is already there.
-func printHookPlan(out io.Writer, tool string, p agentio.HookPlan) {
+// printHookPlan prints what a plan would add, what it would replace and
+// what is already there.
+func printHookPlan(out io.Writer, tool string, p agentio.HookPlan, replace []agentio.HookEntry) {
 	fmt.Fprintf(out, "%s: %s\n", tool, p.File)
+	for _, e := range replace {
+		fmt.Fprintf(out, "  replace %-20s %s\n", e.Event, e.Command)
+	}
 	for _, e := range p.Present {
 		fmt.Fprintf(out, "  present %-20s %s\n", e.Event, e.Command)
 	}

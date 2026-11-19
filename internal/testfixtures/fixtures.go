@@ -131,7 +131,7 @@ func CodexHome(t *testing.T, home string, rollouts map[string]string, order ...s
 func CodexCurrent() string {
 	return lines(
 		`{"timestamp":"2026-02-01T09:00:00.000Z","type":"session_meta","payload":{"id":"`+CodexSession+`","timestamp":"2026-02-01T09:00:00.000Z","cwd":"/work/alice","originator":"Codex Desktop","cli_version":"0.160.0","source":"vscode","model_provider":"openai"}}`,
-		`{"timestamp":"2026-02-01T09:00:00.100Z","type":"turn_context","payload":{"cwd":"/work/alice","approval_policy":"on-request","sandbox_policy":{"type":"workspace-write","network_access":false},"model":"gpt-test-1","timezone":"UTC","collaboration_mode":{"mode":"default","settings":{"reasoning_effort":"medium"}}}}`,
+		`{"timestamp":"2026-02-01T09:00:00.100Z","type":"turn_context","payload":{"cwd":"/work/alice","approval_policy":"on-request","sandbox_policy":{"type":"workspace-write","network_access":false},"model":"gpt-test-1","personality":"pragmatic","timezone":"UTC","collaboration_mode":{"mode":"default","settings":{"reasoning_effort":"medium"}}}}`,
 		`{"timestamp":"2026-02-01T09:00:01.000Z","type":"event_msg","payload":{"type":"item_completed","item":{"type":"UserMessage","id":"item-u1","content":[{"type":"text","text":"How do I list files?"}]}}}`,
 		`{"timestamp":"2026-02-01T09:00:02.000Z","type":"event_msg","payload":{"type":"item_completed","item":{"type":"AgentMessage","id":"item-c1","phase":"commentary","content":[{"type":"Text","text":"Looking at the folder."}]}}}`,
 		`{"timestamp":"2026-02-01T09:00:02.100Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":90,"cached_input_tokens":10,"output_tokens":5,"reasoning_output_tokens":0,"total_tokens":95}}}}`,

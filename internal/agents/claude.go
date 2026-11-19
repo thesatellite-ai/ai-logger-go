@@ -12,19 +12,19 @@ import (
 // home plus each conversation's subagent runs (projects/<key>/<session>/
 // subagents/agent-*.jsonl), which ailog has always imported: agentio's
 // neutral listing leaves subagents out (gap A9), so they come from the
-// vendor SubagentRuns. home, when set, is the only home used.
+// vendor SubagentRuns (runs with and without a .meta.json). home, when
+// set, is the only home used.
 func claudeAgent(c *claude.Agent, home string) Agent {
 	n := c.Neutral()
 	a := Agent{
 		Tool:      ToolClaude,
 		Neutral:   n,
 		TestedMax: claude.TestedMax,
-		homeAt:    func(dir string) (agentio.Home, error) { return c.HomeAt(dir).Neutral(), nil },
 	}
 	if home != "" {
 		a.homes = func() ([]agentio.Home, error) { return []agentio.Home{c.HomeAt(home).Neutral()}, nil }
 	}
-	read := claude.TurnsFile
+	read := neutralReader(n)
 	a.transcripts = func(ctx context.Context, h agentio.Home) ([]Transcript, error) {
 		convs, out, err := conversationTranscripts(ctx, n, h, read)
 		if err != nil {
