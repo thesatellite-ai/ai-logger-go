@@ -56,17 +56,17 @@ func SessionMarkdown(sessionID, sessionName string, entries []*ent.Entry) []byte
 // the data is unavailable — the writer skips zeroed fields so the
 // output stays tight.
 type sessionMeta struct {
-	ID         string
-	Name       string
-	Tool       string
-	Project    string
-	FirstAt    time.Time
-	LastAt     time.Time
-	TurnCount  int
-	TokensIn   int
-	TokensOut  int
-	TokensCR   int // cache read
-	ModelSeen  []string
+	ID        string
+	Name      string
+	Tool      string
+	Project   string
+	FirstAt   time.Time
+	LastAt    time.Time
+	TurnCount int
+	TokensIn  int
+	TokensOut int
+	TokensCR  int // cache read
+	ModelSeen []string
 }
 
 func summarize(sessionID, sessionName string, entries []*ent.Entry) sessionMeta {
@@ -268,4 +268,3 @@ func quoteEach(ss []string) []string {
 	}
 	return out
 }
-

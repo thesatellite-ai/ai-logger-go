@@ -11,13 +11,13 @@ import (
 //
 // Comparison order:
 //
-//	1. Strip prerelease for the primary compare ("0.118.0-alpha.2" → "0.118.0").
-//	2. Walk numeric segments left-to-right; missing segments compare as 0.
-//	3. If primary segments tie AND both sides had a prerelease, compare
-//	   prereleases lexicographically.
-//	4. A version with NO prerelease beats one WITH a prerelease at the
-//	   same primary triple ("0.118.0" > "0.118.0-alpha.2"), matching
-//	   semver convention.
+//  1. Strip prerelease for the primary compare ("0.118.0-alpha.2" → "0.118.0").
+//  2. Walk numeric segments left-to-right; missing segments compare as 0.
+//  3. If primary segments tie AND both sides had a prerelease, compare
+//     prereleases lexicographically.
+//  4. A version with NO prerelease beats one WITH a prerelease at the
+//     same primary triple ("0.118.0" > "0.118.0-alpha.2"), matching
+//     semver convention.
 //
 // Empty strings sort lowest. Non-numeric segments are treated as zero,
 // which is a conservative choice — if a tool ever ships "x.y.z-foo"
