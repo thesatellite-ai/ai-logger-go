@@ -19,7 +19,7 @@ func TestDedupeCommand_DryRunThenBackupAndMerge(t *testing.T) {
 	}
 	hookAt := time.Date(2026, 3, 1, 15, 30, 0, 100e6, time.FixedZone("IST", 5*3600+1800))
 	importAt := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC)
-	hook, _ := st.InsertEntry(ctx, store.InsertEntryInput{Tool: "claude-code", SessionID: "s1", Prompt: "Explain goroutines.", CreatedAt: &hookAt})
+	hook, _ := st.InsertEntry(ctx, store.InsertEntryInput{Tool: "claude-code", SessionID: "s1", Prompt: "Explain goroutines.", Hostname: "mac", CreatedAt: &hookAt})
 	imp, _ := st.InsertEntry(ctx, store.InsertEntryInput{Tool: "claude-code", SessionID: "s1", Prompt: "Explain goroutines.", Response: "Threads.", CreatedAt: &importAt})
 	_ = st.ImportLineRecord(ctx, "k1", "/t.jsonl", imp)
 	_ = st.Close()

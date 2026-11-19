@@ -17,12 +17,15 @@ var ist = time.FixedZone("IST", 5*3600+1800)
 
 // hookRow writes what the live prompt hook (and, with resp, its Stop
 // hook) stores: capture time, terminal, the transcript path as raw.
+// testHost is the hostname a live hook records on every row it writes.
+const testHost = "mac"
+
 func hookRow(t *testing.T, e *env, session, prompt, resp string, at time.Time) string {
 	t.Helper()
 	ctx := context.Background()
 	local := at.In(ist)
 	id, err := e.st.InsertEntry(ctx, store.InsertEntryInput{Tool: agents.ToolClaude, SessionID: session, Prompt: prompt,
-		Terminal: "ghostty", PermissionMode: "plan", Raw: "/transcripts/" + session + ".jsonl", CreatedAt: &local})
+		Terminal: "ghostty", PermissionMode: "plan", Raw: "/transcripts/" + session + ".jsonl", Hostname: testHost, CreatedAt: &local})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,5 +180,32 @@ func TestDedupe_MergesImportDuplicates(t *testing.T) {
 	mainTranscript(t, e, cl[0])
 	if s := e.run(t, agents.ToolClaude, Options{}); s.Inserted != 0 {
 		t.Fatalf("re-import after dedupe = %+v", s)
+	}
+}
+
+// A prompt sent twice in a burst has two live captures. Once the importer
+// (or a first dedupe) links one of them, it is still a live capture: no
+// dedupe run may merge it into the other one, so a second run merges
+// nothing. An old imported row with no key is never a merge target.
+func TestDedupe_NeverMergesTwoLiveCaptures(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	const prompt = "continue"
+	first := hookRow(t, e, tf.ClaudeSession, prompt, "", u1At)
+	second := hookRow(t, e, tf.ClaudeSession, prompt, "", u1At.Add(8*time.Second))
+	_ = e.st.ImportLineRecord(ctx, "claimed-key", "/f", first) // the importer claimed the first capture
+	oldAt := u1At.Add(30 * time.Second)
+	oldImport, _ := e.st.InsertEntry(ctx, store.InsertEntryInput{Tool: agents.ToolClaude, SessionID: tf.ClaudeSession, Prompt: prompt, CreatedAt: &oldAt})
+
+	for run := 1; run <= 2; run++ {
+		got, err := Dedupe(ctx, e.st, false)
+		if err != nil || got.Total() != 0 {
+			t.Fatalf("run %d = %+v %v, want nothing merged", run, got, err)
+		}
+	}
+	for _, id := range []string{first, second, oldImport} {
+		if _, err := e.st.GetByID(ctx, id); err != nil {
+			t.Fatalf("row %s was merged away", id)
+		}
 	}
 }

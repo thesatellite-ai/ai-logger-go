@@ -28,6 +28,12 @@ import (
 //	               with the transcript_path while import historically
 //	               stored a hash in the same column.
 //
+// import_lines_entry_idx serves the lookups by entry: a session's linked
+// rows (Store.SessionRows) and Store.MergeInto moving an entry's keys.
+// Without it each was a scan of every key (80k on a real log), once per
+// session and once per merge. CREATE INDEX IF NOT EXISTS gives an older
+// database the index on its next open.
+//
 // Both are raw SQL (CREATE IF NOT EXISTS) — they're internal bookkeeping
 // for one CLI subcommand and don't need to live in the ent schema.
 const importStateDDL = `
@@ -44,6 +50,7 @@ CREATE TABLE IF NOT EXISTS import_lines (
     created_at   TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS import_lines_file_idx ON import_lines(file_path);
+CREATE INDEX IF NOT EXISTS import_lines_entry_idx ON import_lines(entry_id);
 `
 
 // importOffsetColumn is the import_state column holding the read cursor.
@@ -105,7 +112,7 @@ type FileWatermark struct {
 // path or a database session key); ok=false when none.
 func (s *Store) ImportFileWatermark(ctx context.Context, key string) (w FileWatermark, ok bool, err error) {
 	var lastAt string
-	row := s.db.QueryRowContext(ctx,
+	row := s.q.QueryRowContext(ctx,
 		`SELECT mtime_unix_nano, size, `+importOffsetColumn+`, last_imported_at FROM import_state WHERE file_path = ?`,
 		key)
 	if err = row.Scan(&w.MtimeUnixNano, &w.Size, &w.Offset, &lastAt); err != nil {
@@ -120,7 +127,7 @@ func (s *Store) ImportFileWatermark(ctx context.Context, key string) (w FileWate
 
 // ImportFileMark stores the watermark and read cursor for key.
 func (s *Store) ImportFileMark(ctx context.Context, key string, mtime time.Time, size, offset int64) error {
-	_, err := s.db.ExecContext(ctx, `
+	_, err := s.q.ExecContext(ctx, `
 		INSERT INTO import_state (file_path, mtime_unix_nano, size, `+importOffsetColumn+`, last_imported_at)
 		VALUES (?, ?, ?, ?, ?)
 		ON CONFLICT(file_path) DO UPDATE SET
@@ -144,7 +151,7 @@ func (s *Store) ImportLineEntry(ctx context.Context, key string) (entryID string
 	if key == "" {
 		return "", false, nil
 	}
-	row := s.db.QueryRowContext(ctx, `SELECT entry_id FROM import_lines WHERE line_hash = ?`, key)
+	row := s.q.QueryRowContext(ctx, `SELECT entry_id FROM import_lines WHERE line_hash = ?`, key)
 	if err := row.Scan(&entryID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", false, nil
@@ -160,7 +167,7 @@ func (s *Store) ImportLineRecord(ctx context.Context, key, source, entryID strin
 	if key == "" {
 		return nil
 	}
-	_, err := s.db.ExecContext(ctx, `
+	_, err := s.q.ExecContext(ctx, `
 		INSERT OR IGNORE INTO import_lines (line_hash, file_path, entry_id, created_at)
 		VALUES (?, ?, ?, ?)
 	`, key, source, entryID, time.Now().UTC().Format(time.RFC3339Nano))

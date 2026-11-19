@@ -31,7 +31,7 @@ type SearchFilter struct {
 func (s *Store) Search(ctx context.Context, query string, f SearchFilter) ([]*Entry, error) {
 	q := s.client.Entry.Query()
 	if query != "" {
-		ids, err := ftsSearch(ctx, s.db, query, f.Limit)
+		ids, err := ftsSearch(ctx, s.q, query, f.Limit)
 		if err != nil {
 			return nil, err
 		}
@@ -76,7 +76,7 @@ func (s *Store) ResolveIDPrefix(ctx context.Context, prefix string) (string, err
 	if len(prefix) == 36 {
 		return prefix, nil
 	}
-	rows, err := s.db.QueryContext(ctx,
+	rows, err := s.q.QueryContext(ctx,
 		`SELECT id FROM entries WHERE id LIKE ? || '%' LIMIT 2`,
 		prefix,
 	)
@@ -146,6 +146,11 @@ type SessionRow struct {
 	// Linked reports that an import key (import_lines) points at the row:
 	// the importer stored it, or already matched it to a transcript turn.
 	Linked bool
+	// Captured reports that ailog wrote the row as it happened (a live
+	// hook or `ailog add`: they record the hostname, which an import
+	// never does). A captured row stays captured after the importer or
+	// dedupe links it, so dedupe never takes it for an imported copy.
+	Captured bool
 }
 
 // SessionRows lists a tool's entries of one session, oldest first, with
@@ -157,7 +162,7 @@ func (s *Store) SessionRows(ctx context.Context, tool, sessionID string) ([]Sess
 	}
 	es, err := s.client.Entry.Query().
 		Where(entry.SessionIDEQ(sessionID), entry.ToolEQ(tool)).
-		Select(entry.FieldID, entry.FieldPrompt, entry.FieldResponse, entry.FieldCreatedAt, entry.FieldTranscriptAt, entry.FieldTurnIndex).
+		Select(entry.FieldID, entry.FieldPrompt, entry.FieldResponse, entry.FieldCreatedAt, entry.FieldTranscriptAt, entry.FieldTurnIndex, entry.FieldHostname).
 		All(ctx)
 	if err != nil {
 		return nil, err
@@ -169,7 +174,7 @@ func (s *Store) SessionRows(ctx context.Context, tool, sessionID string) ([]Sess
 	out := make([]SessionRow, len(es))
 	for i, e := range es {
 		out[i] = SessionRow{ID: e.ID, Prompt: e.Prompt, Response: e.Response, CreatedAt: e.CreatedAt, TranscriptAt: e.TranscriptAt,
-			TurnIndex: e.TurnIndex, Linked: linked[e.ID]}
+			TurnIndex: e.TurnIndex, Linked: linked[e.ID], Captured: e.Hostname != ""}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].At().Before(out[j].At()) })
 	return out, nil
@@ -187,8 +192,8 @@ func (r SessionRow) At() time.Time {
 // linkedIDs is the set of a session's entry ids that an import key
 // points at.
 func (s *Store) linkedIDs(ctx context.Context, sessionID string) (map[string]bool, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT DISTINCT l.entry_id FROM import_lines l JOIN entries e ON e.id = l.entry_id
+	rows, err := s.q.QueryContext(ctx, `
+		SELECT DISTINCT e.id FROM entries e JOIN import_lines l ON l.entry_id = e.id
 		WHERE e.session_id = ?`, sessionID)
 	if err != nil {
 		return nil, err
@@ -262,7 +267,7 @@ func (s *Store) FillEmpty(ctx context.Context, id string, in FillInput) (bool, e
 		return false, fmt.Errorf("fill entry: %w", err)
 	}
 	if fillResponse {
-		if err := ftsUpdateResponse(ctx, s.db, id, in.Response); err != nil {
+		if err := ftsUpdateResponse(ctx, s.q, id, in.Response); err != nil {
 			return true, err
 		}
 	}
@@ -310,14 +315,14 @@ func (s *Store) MergeInto(ctx context.Context, from, into string) error {
 		`UPDATE import_lines SET entry_id = ? WHERE entry_id = ?`,
 		`UPDATE entries SET parent_entry_id = ? WHERE parent_entry_id = ?`,
 	} {
-		if _, err := s.db.ExecContext(ctx, q, into, from); err != nil {
+		if _, err := s.q.ExecContext(ctx, q, into, from); err != nil {
 			return fmt.Errorf("merge: %w", err)
 		}
 	}
 	if err := s.client.Entry.DeleteOneID(from).Exec(ctx); err != nil {
 		return fmt.Errorf("merge: delete %s: %w", from, err)
 	}
-	if err := ftsDelete(ctx, s.db, from); err != nil {
+	if err := ftsDelete(ctx, s.q, from); err != nil {
 		return fmt.Errorf("merge: search row: %w", err)
 	}
 	return nil
@@ -326,7 +331,7 @@ func (s *Store) MergeInto(ctx context.Context, from, into string) error {
 // DuplicateSessions lists the (tool, session) pairs holding the same
 // non-empty prompt more than once: where ailog dedupe looks.
 func (s *Store) DuplicateSessions(ctx context.Context) ([][2]string, error) {
-	rows, err := s.db.QueryContext(ctx, `
+	rows, err := s.q.QueryContext(ctx, `
 		SELECT DISTINCT tool, session_id FROM (
 			SELECT tool, session_id FROM entries
 			WHERE prompt != '' AND session_id != ''
