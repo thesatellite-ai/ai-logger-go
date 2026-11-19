@@ -69,6 +69,9 @@ type Stats struct {
 	// Updated counts stored answers replaced by a rewritten copy of the
 	// same message (same message id, new bytes).
 	Updated int
+	// BadLines counts transcript lines skipped as undecodable (each one
+	// is printed as a warning; the read goes on past it).
+	BadLines int
 
 	// Drift watchdog counters. Files where the anchor check passed at
 	// least once are "healthy"; files with answers but zero anchor
@@ -146,11 +149,7 @@ func importHomes(a agents.Agent, dir string) ([]agentio.Home, error) {
 			}
 		}
 	}
-	h, err := a.HomeAt(dir)
-	if err != nil {
-		return nil, fmt.Errorf("%s: --from %s: %w", a.Tool, dir, err)
-	}
-	return []agentio.Home{h}, nil
+	return []agentio.Home{a.HomeAt(dir)}, nil
 }
 
 // importTranscript reads one transcript from its stored cursor and writes
@@ -190,7 +189,11 @@ func importTranscript(ctx context.Context, st *store.Store, a agents.Agent, t ag
 		limitHit       bool
 	)
 	annotate := t.Annotator()
-	next, readErr := t.Turns(from, func(turn agentio.Turn) error {
+	bad := func(b agentio.BadLine) {
+		stats.BadLines++
+		fmt.Fprintf(opts.Out, "warn %s: skipped an undecodable line at byte %d: %v\n", t.Key, b.Offset, b.Err)
+	}
+	next, readErr := t.TurnsReporting(from, func(turn agentio.Turn) error {
 		r, ok := recordOf(a, t, turn, annotate(turn))
 		if !ok {
 			return nil
@@ -220,7 +223,7 @@ func importTranscript(ctx context.Context, st *store.Store, a agents.Agent, t ag
 			fileRecords++
 		}
 		return err
-	})
+	}, bad)
 	if readErr != nil && !errors.Is(readErr, errStopParsing) {
 		fmt.Fprintf(opts.Out, "parse %s: %v\n", t.Key, readErr)
 		return false, nil

@@ -25,7 +25,6 @@ func geminiAgent(g *gemini.Agent) Agent {
 	read := neutralReader(n)
 	return Agent{
 		Tool: ToolGemini, Neutral: n, TestedMax: gemini.TestedMax, UseTitle: true,
-		homeAt: func(dir string) (agentio.Home, error) { return g.HomeAt(dir).Neutral(), nil },
 		transcripts: func(ctx context.Context, h agentio.Home) ([]Transcript, error) {
 			_, out, err := conversationTranscripts(ctx, n, h, read)
 			return out, err
@@ -39,7 +38,6 @@ func piAgent(p *pi.Agent) Agent {
 	read := neutralReader(n)
 	return Agent{
 		Tool: ToolPi, Neutral: n, TestedMax: pi.TestedMax, UseTitle: true,
-		homeAt: func(dir string) (agentio.Home, error) { return p.HomeAt(dir).Neutral(), nil },
 		transcripts: func(ctx context.Context, h agentio.Home) ([]Transcript, error) {
 			_, out, err := conversationTranscripts(ctx, n, h, read)
 			return out, err
@@ -56,8 +54,7 @@ func opencodeAgent(o *opencode.Agent) Agent {
 	n := o.Neutral()
 	read := neutralReader(n)
 	return Agent{
-		Tool: ToolOpencode, Neutral: n, TestedMax: opencode.TestedMax, UseTitle: true, WholeRecordKey: true,
-		homeAt: func(dir string) (agentio.Home, error) { return o.HomeAt(dir).Neutral(), nil },
+		Tool: ToolOpencode, Neutral: n, TestedMax: opencode.TestedMax, UseTitle: true,
 		transcripts: func(ctx context.Context, h agentio.Home) ([]Transcript, error) {
 			oh, err := o.HomeOf(h)
 			if err != nil {
@@ -107,7 +104,7 @@ func opencodeDBTranscripts(ctx context.Context, o *opencode.Agent, h opencode.Ho
 		sid, project := s.ID, s.ProjectID
 		out = append(out, Transcript{
 			Key: path + dbKeySep + sid, ConversationID: sid, Title: c.Title, Dir: c.Dir, Home: c.Home, Updated: c.Updated,
-			read: func(from agentio.Offset, fn func(agentio.Turn) error) (agentio.Offset, error) {
+			read: func(from agentio.Offset, fn func(agentio.Turn) error, _ func(agentio.BadLine)) (agentio.Offset, error) {
 				d := store.Open(h, path)
 				// Read-only database: a close error cannot lose data.
 				defer func() { _ = d.Close() }()

@@ -80,15 +80,22 @@ type Transcript struct {
 	Home           agentio.Home
 	Updated        time.Time
 
-	read     func(from agentio.Offset, fn func(agentio.Turn) error) (agentio.Offset, error)
+	read     func(from agentio.Offset, fn func(agentio.Turn) error, bad func(agentio.BadLine)) (agentio.Offset, error)
 	annotate func() Annotator
 }
 
 // Turns reads the transcript's turns from cursor from (0 = the start) and
 // returns the cursor to store for the next read (agentio's opaque Offset).
-// Disk · Read.
+// Undecodable lines are skipped silently. Disk · Read.
 func (t Transcript) Turns(from agentio.Offset, fn func(agentio.Turn) error) (agentio.Offset, error) {
-	return t.read(from, fn)
+	return t.read(from, fn, nil)
+}
+
+// TurnsReporting is Turns that also reports each line the reader skipped
+// as undecodable (agentio.TurnsAtReporting; a database-held transcript
+// has no lines and never reports). Disk · Read.
+func (t Transcript) TurnsReporting(from agentio.Offset, fn func(agentio.Turn) error, bad func(agentio.BadLine)) (agentio.Offset, error) {
+	return t.read(from, fn, bad)
 }
 
 // Annotator prepares the per-turn annotation of this transcript (it may
@@ -114,22 +121,14 @@ type Agent struct {
 	// UseTitle stores the conversation title as the entry's session name.
 	// Off for claude-code and codex, which never stored one (their rows
 	// stay as they were).
-	UseTitle bool
-	// WholeRecordKey makes the importer's legacy dedup key the hash of
-	// Turn.Raw exactly as read (opencode: one JSON file per message, the
-	// key older ailog wrote). Unset, the key is the hash of the record's
-	// line without its line terminator, the key older ailog wrote for
-	// JSONL transcripts (bufio.ScanLines bytes).
-	WholeRecordKey bool
-
-	homeAt      func(dir string) (agentio.Home, error)
+	UseTitle    bool
 	homes       func() ([]agentio.Home, error)
 	transcripts func(ctx context.Context, h agentio.Home) ([]Transcript, error)
 }
 
-// HomeAt returns the agent's home at dir, without checking it holds
-// anything. Pure, except Codex which resolves the folder (Disk · Read).
-func (a Agent) HomeAt(dir string) (agentio.Home, error) { return a.homeAt(dir) }
+// HomeAt returns the agent's home at dir (agentio Agent.HomeAt), without
+// checking it holds anything. Pure.
+func (a Agent) HomeAt(dir string) agentio.Home { return a.Neutral.HomeAt(dir) }
 
 // Homes lists the homes on disk (default first). Disk · Read.
 func (a Agent) Homes() ([]agentio.Home, error) {
@@ -245,7 +244,7 @@ func FromOS() (Registry, error) {
 // conversationTranscripts lists the file transcripts of h through the
 // neutral ConversationLister, one per conversation with a Path.
 // Disk · Read.
-func conversationTranscripts(ctx context.Context, a agentio.Agent, h agentio.Home, read func(path string, from agentio.Offset, fn func(agentio.Turn) error) (agentio.Offset, error)) ([]agentio.Conversation, []Transcript, error) {
+func conversationTranscripts(ctx context.Context, a agentio.Agent, h agentio.Home, read readFunc) ([]agentio.Conversation, []Transcript, error) {
 	l, ok := agentio.ConversationsOf(a)
 	if !ok {
 		return nil, nil, nil
@@ -265,22 +264,26 @@ func conversationTranscripts(ctx context.Context, a agentio.Agent, h agentio.Hom
 }
 
 // fileTranscript is a Transcript over one file of conversation c.
-func fileTranscript(path string, c agentio.Conversation, read func(path string, from agentio.Offset, fn func(agentio.Turn) error) (agentio.Offset, error)) Transcript {
+func fileTranscript(path string, c agentio.Conversation, read readFunc) Transcript {
 	return Transcript{
 		Key: path, Path: path, ConversationID: c.ID, Title: c.Title, Dir: c.Dir, Home: c.Home, Updated: c.Updated,
-		read: func(from agentio.Offset, fn func(agentio.Turn) error) (agentio.Offset, error) {
-			return read(path, from, fn)
+		read: func(from agentio.Offset, fn func(agentio.Turn) error, bad func(agentio.BadLine)) (agentio.Offset, error) {
+			return read(path, from, fn, bad)
 		},
 	}
 }
 
+// readFunc reads the transcript file at path from a cursor, reporting
+// skipped lines to bad (nil = silently).
+type readFunc func(path string, from agentio.Offset, fn func(agentio.Turn) error, bad func(agentio.BadLine)) (agentio.Offset, error)
+
 // neutralReader is the TurnFileReader read of a neutral agent.
-func neutralReader(a agentio.Agent) func(path string, from agentio.Offset, fn func(agentio.Turn) error) (agentio.Offset, error) {
-	return func(path string, from agentio.Offset, fn func(agentio.Turn) error) (agentio.Offset, error) {
+func neutralReader(a agentio.Agent) readFunc {
+	return func(path string, from agentio.Offset, fn func(agentio.Turn) error, bad func(agentio.BadLine)) (agentio.Offset, error) {
 		r, ok := agentio.TurnFilesOf(a)
 		if !ok {
 			return from, errNoTurnFiles
 		}
-		return r.TurnsAt(path, from, fn)
+		return agentio.TurnsAtReporting(r, path, from, fn, bad)
 	}
 }
