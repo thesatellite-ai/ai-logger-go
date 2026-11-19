@@ -97,11 +97,7 @@ ailog hooks install --tool claude-code     # writes into ~/.claude/settings.json
 ailog hooks uninstall                      # defaults to --tool claude-code
 ```
 
-`install` is surgical-**write** (merges with existing `hooks{}` in
-`settings.json` without clobbering other tools' entries). `uninstall`
-is surgical-**delete** (walks `hooks[event][].hooks[]` and drops only
-entries whose `command` contains `" hook "` + `"ailog"` — other tools
-preserved).
+`install` merges: it adds only ailog's own `UserPromptSubmit` and `Stop` entries and keeps every other hook, key, key order and formatting byte as it was. Running it twice changes nothing. Before any write it saves the old file as `settings.json.bak-<timestamp>`; `--dry-run` prints the diff instead of writing. `uninstall` removes only commands of the form `<path>/ailog hook claude-code <event>` (same backup and `--dry-run`); other tools' entries are preserved.
 
 See `ailog hook --help` for the internal adapter surface — you
 rarely invoke these directly; the harness does via the hook config.
@@ -396,7 +392,7 @@ check + re-apply regardless.
 | `AILOG_TOOL` | Default `--tool` for `ailog add` when not supplied |
 | `AILOG_PARENT_PID` | Override `pid` in captured context (defaults to `os.Getppid()`) |
 | `AILOG_TERMINAL_TITLE` | Best-effort terminal-title stamp |
-| `AILOG_HOOK_DEBUG` | Set to `0` to silence `~/.ailog/hook.log` (hook-invocation audit trail) |
+| `AILOG_HOOK_DEBUG` | Set to `1` to write `~/.ailog/hook.log` (hook-invocation audit trail; off by default). Payloads are redacted before writing and the file rotates to `hook.log.1` at 10 MiB |
 
 ---
 
