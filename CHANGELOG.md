@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `ailog dedupe [--dry-run]`: merges the duplicates older imports left (an imported copy of a turn the live hook already stored) into the hook rows; a real run backs the database up first.
+- `entries.transcript_at`: the transcript time of imported and matched rows.
 - Gemini CLI and pi are captured: `ailog import gemini`, `ailog import pi`, and `ailog hooks install --tool gemini` (BeforeAgent / AfterAgent hooks).
 - `ailog hooks install --tool codex` writes Codex's `hooks.json` (real Codex payloads are decoded); install prints the steps Codex needs that ailog does not take.
 - `ailog import opencode` reads `opencode.db` (opencode 1.2+) as well as the legacy `storage/` tree.
@@ -24,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - `ailog hook opencode` (a guessed payload; opencode runs no shell-command hooks; use `ailog import opencode`).
 ### Fixed
+- `ailog import` no longer stores a turn a second time when a live hook already logged it: the hook row (same session and prompt, captured within 10 minutes) gets the import keys and its empty fields filled. On a real database an import used to almost triple the repeated prompts.
+- Attaching an answer, redacting and purging no longer scan the whole search index per entry (a rowid map for `entries_fts`), which made a full import of a large history take most of an hour.
 - `ailog hooks install --tool claude-code` merges into `settings.json` instead of replacing every `UserPromptSubmit` / `Stop` hook; it is idempotent, keeps other keys and formatting byte for byte, backs the file up to `settings.json.bak-<timestamp>` and has `--dry-run`. `hooks uninstall` removes only ailog's own commands.
 - `ailog import codex` reads current Codex rollouts (0.158+, `item_completed` items) as well as the old `user_message` / `agent_message` events.
 

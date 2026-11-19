@@ -166,6 +166,9 @@ func buildImportOptions(f importFlags, cmd *cobra.Command) (importer.Options, er
 // count is appended only when non-zero so healthy runs stay quiet.
 func printImportStats(cmd *cobra.Command, name string, st importer.Stats) {
 	tail := ""
+	if st.Linked > 0 {
+		tail += fmt.Sprintf(" — %d prompt(s) linked to live-hook rows", st.Linked)
+	}
 	if st.BadLines > 0 {
 		tail += fmt.Sprintf(" — %d undecodable line(s) skipped", st.BadLines)
 	}

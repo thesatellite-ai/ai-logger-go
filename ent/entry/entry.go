@@ -81,6 +81,8 @@ const (
 	FieldNotes = "notes"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
 	FieldCreatedAt = "created_at"
+	// FieldTranscriptAt holds the string denoting the transcript_at field in the database.
+	FieldTranscriptAt = "transcript_at"
 	// Table holds the table name of the entry in the database.
 	Table = "entries"
 )
@@ -122,6 +124,7 @@ var Columns = []string{
 	FieldStarred,
 	FieldNotes,
 	FieldCreatedAt,
+	FieldTranscriptAt,
 }
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -383,4 +386,9 @@ func ByNotes(opts ...sql.OrderTermOption) OrderOption {
 // ByCreatedAt orders the results by the created_at field.
 func ByCreatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldCreatedAt, opts...).ToFunc()
+}
+
+// ByTranscriptAt orders the results by the transcript_at field.
+func ByTranscriptAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTranscriptAt, opts...).ToFunc()
 }

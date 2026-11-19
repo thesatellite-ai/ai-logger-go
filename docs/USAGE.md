@@ -246,7 +246,9 @@ Idempotency, in the order checked:
 
 1. `import_state`: per transcript, mtime + size watermark and the read cursor agentio returned. An unchanged transcript is skipped, a grown one is read from the cursor, a shrunk (rewritten) one from the start.
 2. `import_lines`: per message, two keys pointing at the same entry: the SHA-256 of the record's line (what every older ailog stored; for opencode the message file) and `msg:<tool>:<conversation>:<message id>`. A hit on either skips the turn and records the other key. A known message id with new bytes (Gemini re-appends an answer once its tokens are known) replaces the stored answer.
-3. A last-resort match on the stored rows: same tool, session, transcript time and prompt text; for an answer, the latest prompt of the session already holding that text.
+3. A match on the stored rows. A prompt matches a row of the same tool and session with the same (trimmed, redacted) text stamped at the same transcript time (an earlier import), or else the row the live hook wrote for that turn: not yet linked to an import key, captured within 10 minutes of the transcript time, the nearest one. A matched hook row gets the import keys and `transcript_at` and gains only the fields it has empty (version, answer, model, usage); its own captured values are never overwritten and no second row is written. An answer matches a row of its turn already holding that text (the Stop hook's answer), else fills the turn's prompt when that has no answer yet.
+
+The 10-minute window comes from a real `log.db`: of 9,859 prompts that both a hook and an import stored, the gap was 0.09 s at the median, 19 s at the 99th percentile and 212 s at most (a prompt queued while the agent was busy).
 
 An undecodable line (a torn write, a line another tool appended) is skipped with a `warn … skipped an undecodable line` message; the turns around it are still imported. Codex commentary (progress messages, `phase: commentary`) is never stored as an answer; an answer whose token count is not written yet is held back and stored, with its usage, on the next run. An answer read in a later run than its prompt is attached to that prompt.
 
@@ -261,6 +263,17 @@ claude-code: 2 home(s), 47 files (43 skipped via watermark) — 124 records
 ### How the drift watchdog works
 
 Per transcript, the driver counts answers seen vs answers carrying token usage (`Role==Assistant && TokensIn>0`). A transcript with the former but none of the latter triggers a warning. If the agent version recorded in it is newer than the version agentio's reader was tested against (`TestedMax` of each agentio agent module), it escalates: `WARN(newer-version)`. `--strict` escalates further to `REJECT` and skips stamping the watermark so a fixed reader walks the file again on the next run. Updating the agentio modules moves `TestedMax`.
+
+---
+
+### `ailog dedupe`
+
+```sh
+ailog dedupe --dry-run     # counts per tool, changes nothing
+ailog dedupe               # writes log.db.bak-<timestamp> first, then merges
+```
+
+Older ailog versions stored a turn twice when both the live hook and `ailog import` saw it. `dedupe` applies the importer's match rule to rows already in the database: each imported row whose prompt a live-hook row of the same session holds, captured within 10 minutes and not yet linked, is merged into that hook row (the hook row keeps its values and gains the import's keys, answer and usage where it has none; the imported row is deleted). Repeated prompts with no hook row nearby are left alone.
 
 ---
 

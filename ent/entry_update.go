@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -531,6 +532,26 @@ func (_u *EntryUpdate) SetNillableNotes(v *string) *EntryUpdate {
 	return _u
 }
 
+// SetTranscriptAt sets the "transcript_at" field.
+func (_u *EntryUpdate) SetTranscriptAt(v time.Time) *EntryUpdate {
+	_u.mutation.SetTranscriptAt(v)
+	return _u
+}
+
+// SetNillableTranscriptAt sets the "transcript_at" field if the given value is not nil.
+func (_u *EntryUpdate) SetNillableTranscriptAt(v *time.Time) *EntryUpdate {
+	if v != nil {
+		_u.SetTranscriptAt(*v)
+	}
+	return _u
+}
+
+// ClearTranscriptAt clears the value of the "transcript_at" field.
+func (_u *EntryUpdate) ClearTranscriptAt() *EntryUpdate {
+	_u.mutation.ClearTranscriptAt()
+	return _u
+}
+
 // Mutation returns the EntryMutation object of the builder.
 func (_u *EntryUpdate) Mutation() *EntryMutation {
 	return _u.mutation
@@ -688,6 +709,12 @@ func (_u *EntryUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Notes(); ok {
 		_spec.SetField(entry.FieldNotes, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.TranscriptAt(); ok {
+		_spec.SetField(entry.FieldTranscriptAt, field.TypeTime, value)
+	}
+	if _u.mutation.TranscriptAtCleared() {
+		_spec.ClearField(entry.FieldTranscriptAt, field.TypeTime)
 	}
 	if _node, err = sqlgraph.UpdateNodes(ctx, _u.driver, _spec); err != nil {
 		if _, ok := err.(*sqlgraph.NotFoundError); ok {
@@ -1213,6 +1240,26 @@ func (_u *EntryUpdateOne) SetNillableNotes(v *string) *EntryUpdateOne {
 	return _u
 }
 
+// SetTranscriptAt sets the "transcript_at" field.
+func (_u *EntryUpdateOne) SetTranscriptAt(v time.Time) *EntryUpdateOne {
+	_u.mutation.SetTranscriptAt(v)
+	return _u
+}
+
+// SetNillableTranscriptAt sets the "transcript_at" field if the given value is not nil.
+func (_u *EntryUpdateOne) SetNillableTranscriptAt(v *time.Time) *EntryUpdateOne {
+	if v != nil {
+		_u.SetTranscriptAt(*v)
+	}
+	return _u
+}
+
+// ClearTranscriptAt clears the value of the "transcript_at" field.
+func (_u *EntryUpdateOne) ClearTranscriptAt() *EntryUpdateOne {
+	_u.mutation.ClearTranscriptAt()
+	return _u
+}
+
 // Mutation returns the EntryMutation object of the builder.
 func (_u *EntryUpdateOne) Mutation() *EntryMutation {
 	return _u.mutation
@@ -1400,6 +1447,12 @@ func (_u *EntryUpdateOne) sqlSave(ctx context.Context) (_node *Entry, err error)
 	}
 	if value, ok := _u.mutation.Notes(); ok {
 		_spec.SetField(entry.FieldNotes, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.TranscriptAt(); ok {
+		_spec.SetField(entry.FieldTranscriptAt, field.TypeTime, value)
+	}
+	if _u.mutation.TranscriptAtCleared() {
+		_spec.ClearField(entry.FieldTranscriptAt, field.TypeTime)
 	}
 	_node = &Entry{config: _u.config}
 	_spec.Assign = _node.assignValues

@@ -15,7 +15,6 @@ import (
 
 	"github.com/khanakia/ai-logger/internal/agents"
 	aictx "github.com/khanakia/ai-logger/internal/context"
-	"github.com/khanakia/ai-logger/internal/redact"
 	"github.com/khanakia/ai-logger/internal/store"
 )
 
@@ -63,9 +62,13 @@ type Stats struct {
 	// RecordsMatched counts turns found already stored under another
 	// key (part of RecordsSkipped).
 	RecordsMatched int
-	Inserted       int // user-side prompts written to entries
-	Attached       int // assistant-side responses paired with prompts
-	Standalone     int // assistant Records with no prior user turn
+	// Linked counts prompts matched to the row a live hook already wrote
+	// for the same turn: the row gets the import keys and its empty
+	// fields, no second row is written (part of RecordsSkipped).
+	Linked     int
+	Inserted   int // user-side prompts written to entries
+	Attached   int // assistant-side responses paired with prompts
+	Standalone int // assistant Records with no prior user turn
 	// Updated counts stored answers replaced by a rewritten copy of the
 	// same message (same message id, new bytes).
 	Updated int
@@ -108,17 +111,14 @@ func Run(ctx context.Context, st *store.Store, a agents.Agent, opts Options) (St
 	}
 	stats.Files = len(all)
 
-	// Per-session prompt the next answer of this run attaches to,
-	// mirroring the live hooks' pairing of a response-less entry with the
-	// next assistant message.
-	pending := map[string]string{} // sessionID → entry id
+	rs := newRunState(st)
 	for _, t := range all {
 		select {
 		case <-ctx.Done():
 			return stats, ctx.Err()
 		default:
 		}
-		stop, err := importTranscript(ctx, st, a, t, &opts, &stats, pending)
+		stop, err := importTranscript(ctx, st, a, t, &opts, &stats, rs)
 		if err != nil {
 			return stats, err
 		}
@@ -154,7 +154,7 @@ func importHomes(a agents.Agent, dir string) ([]agentio.Home, error) {
 
 // importTranscript reads one transcript from its stored cursor and writes
 // its new turns. stop=true when --limit was reached.
-func importTranscript(ctx context.Context, st *store.Store, a agents.Agent, t agents.Transcript, opts *Options, stats *Stats, pending map[string]string) (stop bool, err error) {
+func importTranscript(ctx context.Context, st *store.Store, a agents.Agent, t agents.Transcript, opts *Options, stats *Stats, rs *runState) (stop bool, err error) {
 	mtime, size := t.Updated, int64(0)
 	if t.Path != "" {
 		info, err := os.Stat(t.Path)
@@ -218,7 +218,7 @@ func importTranscript(ctx context.Context, st *store.Store, a agents.Agent, t ag
 		if r.ToolVersion != "" && (fileMaxVer == "" || newerThan(r.ToolVersion, fileMaxVer)) {
 			fileMaxVer = r.ToolVersion
 		}
-		written, err := storeRecord(ctx, st, r, opts, stats, pending)
+		written, err := storeRecord(ctx, rs, r, opts, stats)
 		if written {
 			fileRecords++
 		}
@@ -264,101 +264,6 @@ func importTranscript(ctx context.Context, st *store.Store, a agents.Agent, t ag
 	return false, nil
 }
 
-// storeRecord writes one record unless it is already stored, and records
-// its dedup keys. written=true when a row was inserted or a response
-// attached.
-func storeRecord(ctx context.Context, st *store.Store, r Record, opts *Options, stats *Stats, pending map[string]string) (written bool, err error) {
-	text := redact.Scrub(r.Text)
-
-	// 1. Dedup keys: the record's bytes, then its message id.
-	id, ok, err := st.ImportLineEntry(ctx, r.LineHash)
-	if err != nil {
-		return false, fmt.Errorf("dedup lookup: %w", err)
-	}
-	if ok {
-		recordKeys(ctx, st, r, id)
-		stats.RecordsSkipped++
-		return false, nil
-	}
-	if id, ok, err = st.ImportLineEntry(ctx, r.MsgKey); err != nil {
-		return false, fmt.Errorf("dedup lookup: %w", err)
-	} else if ok {
-		recordKeys(ctx, st, r, id)
-		if r.Role == RoleAssistant && r.LineHash != "" {
-			// Known message, new bytes: the agent rewrote it (Gemini
-			// re-appends an answer once its token count is known; a
-			// database row is updated in place). The newer copy
-			// replaces the stored answer and its usage.
-			if err := attachAssistant(ctx, st, id, r, text); err != nil {
-				return false, err
-			}
-			stats.Updated++
-			return true, nil
-		}
-		stats.RecordsSkipped++
-		return false, nil
-	}
-	switch r.Role {
-	case RoleUser:
-		// 2. Same prompt already stored at the same transcript time.
-		if id, ok, err := st.FindImportedEntry(ctx, store.ImportedTurn{
-			Tool: r.Tool, SessionID: r.SessionID, CreatedAt: r.Timestamp, Prompt: text,
-		}); err != nil {
-			return false, fmt.Errorf("dedup match: %w", err)
-		} else if ok {
-			recordKeys(ctx, st, r, id)
-			stats.RecordsSkipped++
-			stats.RecordsMatched++
-			return false, nil
-		}
-		id, err := writeUserEntry(ctx, st, r, text, opts)
-		if err != nil {
-			return false, err
-		}
-		stats.Inserted++
-		pending[r.SessionID] = id
-		recordKeys(ctx, st, r, id)
-		return true, nil
-
-	case RoleAssistant:
-		// 2. The latest prompt before this answer already holds it.
-		latest, latestResp, haveLatest, err := st.LatestTurn(ctx, r.Tool, r.SessionID, r.Timestamp)
-		if err != nil {
-			return false, fmt.Errorf("dedup match: %w", err)
-		}
-		if haveLatest && latestResp == text {
-			recordKeys(ctx, st, r, latest)
-			stats.RecordsSkipped++
-			stats.RecordsMatched++
-			return false, nil
-		}
-		target, ok := pending[r.SessionID]
-		if !ok && haveLatest && latestResp == "" {
-			// A prompt stored by an earlier run (read from a cursor, or
-			// an answer Codex held back until its token count landed).
-			target, ok = latest, true
-		}
-		if ok && target != "" {
-			if err := attachAssistant(ctx, st, target, r, text); err != nil {
-				return false, err
-			}
-			stats.Attached++
-			delete(pending, r.SessionID)
-			recordKeys(ctx, st, r, target)
-			return true, nil
-		}
-		// Standalone answer — its own row so the response isn't lost.
-		id, err := writeStandaloneAssistant(ctx, st, r, text, opts)
-		if err != nil {
-			return false, err
-		}
-		stats.Standalone++
-		recordKeys(ctx, st, r, id)
-		return true, nil
-	}
-	return false, nil
-}
-
 // recordKeys records both dedup keys of r for entry id (a key already
 // recorded keeps its entry). Best effort: a failed write only costs a
 // later dedup lookup.
@@ -397,6 +302,7 @@ func writeUserEntry(ctx context.Context, st *store.Store, r Record, text string,
 	if !r.Timestamp.IsZero() {
 		ts := r.Timestamp
 		in.CreatedAt = &ts
+		in.TranscriptAt = &ts
 	}
 	return st.InsertEntry(ctx, in)
 }
@@ -433,6 +339,7 @@ func writeStandaloneAssistant(ctx context.Context, st *store.Store, r Record, te
 	if !r.Timestamp.IsZero() {
 		ts := r.Timestamp
 		in.CreatedAt = &ts
+		in.TranscriptAt = &ts
 	}
 	return st.InsertEntry(ctx, in)
 }

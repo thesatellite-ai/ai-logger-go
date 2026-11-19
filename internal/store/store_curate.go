@@ -35,8 +35,7 @@ func (s *Store) SetNotes(ctx context.Context, id, notes string) error {
 	if _, err := s.client.Entry.UpdateOneID(id).SetNotes(notes).Save(ctx); err != nil {
 		return err
 	}
-	_, err := s.db.ExecContext(ctx, `UPDATE entries_fts SET notes = ? WHERE entry_id = ?`, notes, id)
-	return err
+	return ftsUpdate(ctx, s.db, id, "notes = ?", notes)
 }
 
 // Redact overwrites prompt/response/notes with the literal string
@@ -54,11 +53,7 @@ func (s *Store) Redact(ctx context.Context, id string) error {
 		Save(ctx); err != nil {
 		return err
 	}
-	_, err := s.db.ExecContext(ctx,
-		`UPDATE entries_fts SET prompt = ?, response = ?, notes = ? WHERE entry_id = ?`,
-		marker, marker, marker, id,
-	)
-	return err
+	return ftsUpdate(ctx, s.db, id, "prompt = ?, response = ?, notes = ?", marker, marker, marker)
 }
 
 // PurgeBefore hard-deletes every entry created before t and its
@@ -83,7 +78,7 @@ func (s *Store) PurgeBefore(ctx context.Context, t time.Time) (int, error) {
 	// IN clause would also work but the per-row delete keeps the SQL
 	// simple and avoids a parameter-limit edge case.
 	for _, id := range ids {
-		if _, err := s.db.ExecContext(ctx, `DELETE FROM entries_fts WHERE entry_id = ?`, id); err != nil {
+		if err := ftsDelete(ctx, s.db, id); err != nil {
 			return n, err
 		}
 	}
