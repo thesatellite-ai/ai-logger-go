@@ -10,14 +10,14 @@ require (
 	github.com/go-playground/form/v4 v4.3.0
 	github.com/google/uuid v1.6.0
 	github.com/spf13/cobra v1.10.2
-	github.com/ubgo/agentio v0.1.1-0.20261119160347-126155f2944c
-	github.com/ubgo/agentio/builtin v0.1.1-0.20261119160347-126155f2944c
-	github.com/ubgo/agentio/claude v0.1.1-0.20261119160347-126155f2944c
-	github.com/ubgo/agentio/codex v0.1.1-0.20261119160347-126155f2944c
-	github.com/ubgo/agentio/gemini v0.1.1-0.20261119160347-126155f2944c
-	github.com/ubgo/agentio/opencode v0.0.0-20261119160347-126155f2944c
-	github.com/ubgo/agentio/opencode/store v0.0.0-20261119160347-126155f2944c
-	github.com/ubgo/agentio/pi v0.1.1-0.20261119160347-126155f2944c
+	github.com/ubgo/agentio v0.1.1
+	github.com/ubgo/agentio/builtin v0.1.1
+	github.com/ubgo/agentio/claude v0.1.1
+	github.com/ubgo/agentio/codex v0.1.1
+	github.com/ubgo/agentio/gemini v0.1.1
+	github.com/ubgo/agentio/opencode v0.1.0
+	github.com/ubgo/agentio/opencode/store v0.1.0
+	github.com/ubgo/agentio/pi v0.1.1
 	github.com/yuin/goldmark v1.8.2
 	github.com/yuin/goldmark-highlighting/v2 v2.0.0-20230729083705-37449abec8cc
 	modernc.org/sqlite v1.60.1
