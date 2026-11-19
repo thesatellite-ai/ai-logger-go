@@ -25,7 +25,9 @@ import (
 // the same commit. `ailog migrate` also always runs unconditionally,
 // so users can force a re-migration even if the marker is already at
 // the current version.
-const SchemaVersion = 3
+//
+// 4: index on entries.parent_entry_id (Store.MergeInto re-points children).
+const SchemaVersion = 4
 
 // currentSchemaVersion returns the version stored in the schema_meta
 // table, or 0 if the table doesn't exist yet (fresh DB).

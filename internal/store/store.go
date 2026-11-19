@@ -107,8 +107,67 @@ type AttachResponseInput struct {
 // Callers obtain one with Open() and close with Close().
 type Store struct {
 	client *ent.Client
-	db     *sql.DB
-	path   string
+	// db owns the connection pool: Close, migrations, backups and
+	// starting transactions. Row reads and writes go through q.
+	db *sql.DB
+	// q runs row reads and writes: db itself, or the *sql.Tx of a Store
+	// handed out by InTx, so raw SQL and ent share one transaction.
+	q    querier
+	path string
+	// inTx marks a Store handed out by InTx; nesting is refused because
+	// SQLite has no nested BEGIN and a second pool transaction would wait
+	// on the first one's write lock.
+	inTx bool
+}
+
+// querier is what *sql.DB and *sql.Tx share for row reads and writes.
+type querier interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+// txDriver is an ent driver bound to an open *sql.Tx. ent's update and
+// delete builders call Driver.Tx for their own statements; here that
+// joins the open transaction (dialect.NopTx: no commit of its own)
+// instead of starting a second one on a connection that holds no
+// transaction. Close is a no-op: InTx ends the transaction.
+type txDriver struct{ *entsql.Driver }
+
+// Tx joins the open transaction.
+func (d txDriver) Tx(context.Context) (dialect.Tx, error) { return dialect.NopTx(d), nil }
+
+// Close leaves the transaction to InTx.
+func (txDriver) Close() error { return nil }
+
+// ErrNestedTx is returned by InTx on a Store InTx already handed out.
+var ErrNestedTx = errors.New("store: nested transaction")
+
+// InTx runs fn with a Store whose ent client and raw SQL all use one
+// transaction: committed when fn returns nil, rolled back otherwise.
+// Many small writes (ailog dedupe's merges) then pay for one commit
+// instead of one each. The Store passed to fn is valid only inside fn
+// and must not be closed.
+func (s *Store) InTx(ctx context.Context, fn func(tx *Store) error) error {
+	if s.inTx {
+		return ErrNestedTx
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin: %w", err)
+	}
+	drv := txDriver{entsql.NewDriver(dialect.SQLite, entsql.Conn{ExecQuerier: tx})}
+	txStore := &Store{client: ent.NewClient(ent.Driver(drv)), db: s.db, q: tx, path: s.path, inTx: true}
+	if err := fn(txStore); err != nil {
+		if rbErr := tx.Rollback(); rbErr != nil {
+			return errors.Join(err, fmt.Errorf("rollback: %w", rbErr))
+		}
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+	return nil
 }
 
 // Open prepares the SQLite file at path, applies pragmas (WAL, NORMAL
@@ -134,7 +193,7 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	drv := entsql.OpenDB(dialect.SQLite, db)
 	client := ent.NewClient(ent.Driver(drv))
 
-	s := &Store{client: client, db: db, path: abs}
+	s := &Store{client: client, db: db, q: db, path: abs}
 
 	// Importer bookkeeping tables — IF NOT EXISTS, fast (~µs) on warm
 	// DBs, no schema-version bump needed because additive raw SQL.
@@ -253,7 +312,7 @@ func (s *Store) InsertEntry(ctx context.Context, in InsertEntryInput) (string, e
 	if err != nil {
 		return "", fmt.Errorf("insert entry: %w", err)
 	}
-	if err := ftsInsert(ctx, s.db, id, in.Prompt, in.Response, ""); err != nil {
+	if err := ftsInsert(ctx, s.q, id, in.Prompt, in.Response, ""); err != nil {
 		return "", fmt.Errorf("fts index: %w", err)
 	}
 	return id, nil
@@ -295,5 +354,5 @@ func (s *Store) AttachResponse(ctx context.Context, in AttachResponseInput) erro
 	if _, err := u.Save(ctx); err != nil {
 		return fmt.Errorf("attach response: %w", err)
 	}
-	return ftsUpdateResponse(ctx, s.db, in.EntryID, in.Response)
+	return ftsUpdateResponse(ctx, s.q, in.EntryID, in.Response)
 }

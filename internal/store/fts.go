@@ -54,7 +54,7 @@ func applyFTSMigration(ctx context.Context, db *sql.DB) error {
 // ftsRowid returns the entries_fts rowid of an entry: from the map when
 // it still points at that entry, else by scanning (then the map is
 // repaired). ok=false when the entry has no search row.
-func ftsRowid(ctx context.Context, db *sql.DB, entryID string) (rowid int64, ok bool, err error) {
+func ftsRowid(ctx context.Context, db querier, entryID string) (rowid int64, ok bool, err error) {
 	err = db.QueryRowContext(ctx, `
 		SELECT f.rowid FROM entries_fts_rowid m JOIN entries_fts f ON f.rowid = m.fts_rowid
 		WHERE m.entry_id = ? AND f.entry_id = ?`, entryID, entryID).Scan(&rowid)
@@ -75,7 +75,7 @@ func ftsRowid(ctx context.Context, db *sql.DB, entryID string) (rowid int64, ok 
 }
 
 // ftsRemember stores an entry's search rowid in the map.
-func ftsRemember(ctx context.Context, db *sql.DB, entryID string, rowid int64) error {
+func ftsRemember(ctx context.Context, db querier, entryID string, rowid int64) error {
 	_, err := db.ExecContext(ctx,
 		`INSERT INTO entries_fts_rowid (entry_id, fts_rowid) VALUES (?, ?)
 		 ON CONFLICT(entry_id) DO UPDATE SET fts_rowid = excluded.fts_rowid`, entryID, rowid)
@@ -84,7 +84,7 @@ func ftsRemember(ctx context.Context, db *sql.DB, entryID string, rowid int64) e
 
 // ftsUpdate sets columns of an entry's search row (set is the SQL SET
 // list, args its values); a no-op when the entry has no search row.
-func ftsUpdate(ctx context.Context, db *sql.DB, entryID, set string, args ...any) error {
+func ftsUpdate(ctx context.Context, db querier, entryID, set string, args ...any) error {
 	rowid, ok, err := ftsRowid(ctx, db, entryID)
 	if err != nil || !ok {
 		return err
@@ -94,7 +94,7 @@ func ftsUpdate(ctx context.Context, db *sql.DB, entryID, set string, args ...any
 }
 
 // ftsDelete removes an entry's search row and its map row.
-func ftsDelete(ctx context.Context, db *sql.DB, entryID string) error {
+func ftsDelete(ctx context.Context, db querier, entryID string) error {
 	rowid, ok, err := ftsRowid(ctx, db, entryID)
 	if err != nil {
 		return err
@@ -108,7 +108,7 @@ func ftsDelete(ctx context.Context, db *sql.DB, entryID string) error {
 	return err
 }
 
-func ftsInsert(ctx context.Context, db *sql.DB, entryID, prompt, response, notes string) error {
+func ftsInsert(ctx context.Context, db querier, entryID, prompt, response, notes string) error {
 	res, err := db.ExecContext(ctx,
 		`INSERT INTO entries_fts(entry_id, prompt, response, notes) VALUES (?, ?, ?, ?)`,
 		entryID, prompt, response, notes,
@@ -123,13 +123,13 @@ func ftsInsert(ctx context.Context, db *sql.DB, entryID, prompt, response, notes
 	return ftsRemember(ctx, db, entryID, rowid)
 }
 
-func ftsUpdateResponse(ctx context.Context, db *sql.DB, entryID, response string) error {
+func ftsUpdateResponse(ctx context.Context, db querier, entryID, response string) error {
 	return ftsUpdate(ctx, db, entryID, "response = ?", response)
 }
 
 // ftsSearch returns entry ids matching the FTS5 query, most recent first.
 // Callers must validate/escape untrusted input before calling.
-func ftsSearch(ctx context.Context, db *sql.DB, query string, limit int) ([]string, error) {
+func ftsSearch(ctx context.Context, db querier, query string, limit int) ([]string, error) {
 	if limit <= 0 {
 		limit = 50
 	}

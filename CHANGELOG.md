@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-11-19
+
+### Fixed
+- `ailog dedupe` is fast: indexes on `entries.parent_entry_id` and `import_lines.entry_id` (an existing `log.db` gains both on its next open), the session link lookup starts from the session's rows, and a real run makes every merge in one transaction. 10,016 merges on a 115k-row log took 10 seconds including the backup (was 17.5 minutes).
+- `ailog dedupe` merges only an imported row (one ailog did not capture live) into a live-captured row. A second run used to merge a live capture that the first run or an import had linked into another live capture of the same repeated prompt; now a second run merges nothing.
+
 ## [0.1.2] - 2026-11-19
 
 ### Added
@@ -42,5 +48,6 @@ Release process:
   3. Tag the release (e.g. v1.2.0) and update the link refs at the bottom.
 -->
 
-[Unreleased]: https://github.com/thesatellite-ai/ai-logger-go/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/thesatellite-ai/ai-logger-go/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/thesatellite-ai/ai-logger-go/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/thesatellite-ai/ai-logger-go/compare/v0.1.1...v0.1.2

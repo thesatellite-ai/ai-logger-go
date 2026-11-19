@@ -35,7 +35,7 @@ func (s *Store) SetNotes(ctx context.Context, id, notes string) error {
 	if _, err := s.client.Entry.UpdateOneID(id).SetNotes(notes).Save(ctx); err != nil {
 		return err
 	}
-	return ftsUpdate(ctx, s.db, id, "notes = ?", notes)
+	return ftsUpdate(ctx, s.q, id, "notes = ?", notes)
 }
 
 // Redact overwrites prompt/response/notes with the literal string
@@ -53,7 +53,7 @@ func (s *Store) Redact(ctx context.Context, id string) error {
 		Save(ctx); err != nil {
 		return err
 	}
-	return ftsUpdate(ctx, s.db, id, "prompt = ?, response = ?, notes = ?", marker, marker, marker)
+	return ftsUpdate(ctx, s.q, id, "prompt = ?, response = ?, notes = ?", marker, marker, marker)
 }
 
 // PurgeBefore hard-deletes every entry created before t and its
@@ -78,7 +78,7 @@ func (s *Store) PurgeBefore(ctx context.Context, t time.Time) (int, error) {
 	// IN clause would also work but the per-row delete keeps the SQL
 	// simple and avoids a parameter-limit edge case.
 	for _, id := range ids {
-		if err := ftsDelete(ctx, s.db, id); err != nil {
+		if err := ftsDelete(ctx, s.q, id); err != nil {
 			return n, err
 		}
 	}
@@ -305,7 +305,7 @@ func (s *Store) RawHashExists(ctx context.Context, rawHash string) (bool, error)
 		return false, nil
 	}
 	var n int
-	row := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM entries WHERE raw = ?`, rawHash)
+	row := s.q.QueryRowContext(ctx, `SELECT COUNT(*) FROM entries WHERE raw = ?`, rawHash)
 	if err := row.Scan(&n); err != nil {
 		return false, err
 	}

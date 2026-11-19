@@ -343,5 +343,10 @@ func (Entry) Indexes() []ent.Index {
 		index.Fields("git_branch", "created_at"),
 		index.Fields("starred"),
 		index.Fields("permission_mode", "created_at"), // filter "show me plan-mode entries"
+		// Store.MergeInto re-points children with
+		// `UPDATE entries SET parent_entry_id = ? WHERE parent_entry_id = ?`;
+		// without this index every merge scanned the whole table (ailog
+		// dedupe took 17.5 minutes for 10k merges on a 115k-row log).
+		index.Fields("parent_entry_id"),
 	}
 }

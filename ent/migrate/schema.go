@@ -89,6 +89,11 @@ var (
 				Unique:  false,
 				Columns: []*schema.Column{EntriesColumns[30], EntriesColumns[34]},
 			},
+			{
+				Name:    "entry_parent_entry_id",
+				Unique:  false,
+				Columns: []*schema.Column{EntriesColumns[13]},
+			},
 		},
 	}
 	// SessionsColumns holds the columns for the "sessions" table.
