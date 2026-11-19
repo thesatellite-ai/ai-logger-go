@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -23,9 +24,23 @@ import (
 //   - event_msg.token_count     → per-turn usage (input / cached / output);
 //     attached to the most recent agent_message.
 //
-// Everything else (response_item, agent_reasoning, exec_command_*) is
-// internal-pipeline state we don't need for backfill — they'd inflate
-// the entry count without adding new searchable content.
+// Current Codex (0.158+, seen through 0.169) no longer writes
+// user_message / agent_message events. Turns arrive as
+// event_msg.item_completed with a typed item:
+//
+//   - item.type "UserMessage"  → content[] of {type:"text", text}
+//   - item.type "AgentMessage" → content[] of {type:"Text", text} plus
+//     phase (commentary | final_answer)
+//
+// Both formats are read; a file may even mix them after an upgrade
+// mid-session, so a record whose text repeats the previous record of
+// the same role is skipped (one turn, two encodings).
+//
+// Everything else (response_item, agent_reasoning, exec_command_*,
+// Reasoning / CommandExecution / FileChange items) is internal-pipeline
+// state we don't need for backfill. response_item messages are skipped
+// on purpose: their user role also carries harness-injected context
+// (AGENTS.md, environment blocks), not just what the user typed.
 type codex struct{}
 
 func init() { Register(codex{}) }
@@ -37,7 +52,7 @@ func (codex) DefaultRoot() string { return expandHome("~/.codex/sessions") }
 // validated against. Codex versions look like "0.118.0-alpha.2" — the
 // versionCmp helper walks numeric segments and treats prerelease tags
 // per semver convention.
-func (codex) LastKnownVersion() string { return "0.118.0" }
+func (codex) LastKnownVersion() string { return "0.169.0" }
 
 // Anchor: assistant turns must report token usage. Codex emits a
 // token_count event_msg right after every agent_message; the driver's
@@ -157,6 +172,45 @@ type codexEventMsg struct {
 	Info    *codexUsageInfo `json:"info,omitempty"`
 }
 
+// codexItemCompleted is the payload of event_msg.item_completed.
+type codexItemCompleted struct {
+	Item codexItem `json:"item"`
+}
+
+// codexItem is the typed turn item inside item_completed. Only the
+// message kinds carry text we keep.
+type codexItem struct {
+	Type    string             `json:"type"`
+	Phase   string             `json:"phase"`
+	Content []codexItemContent `json:"content"`
+}
+
+// codexItemContent is one content part; text parts are "text" on user
+// messages and "Text" on agent messages, images and others are skipped.
+type codexItemContent struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+// Codex item and phase discriminators.
+const (
+	codexItemUser       = "UserMessage"
+	codexItemAgent      = "AgentMessage"
+	codexPhaseFinal     = "final_answer"
+	codexContentTextKey = "text"
+)
+
+// codexItemText joins the text parts of an item.
+func codexItemText(parts []codexItemContent) string {
+	var texts []string
+	for _, p := range parts {
+		if strings.EqualFold(p.Type, codexContentTextKey) && p.Text != "" {
+			texts = append(texts, p.Text)
+		}
+	}
+	return strings.Join(texts, "\n")
+}
+
 // codexUsageInfo wraps the token_count.info subobject. nil when the
 // CLI hasn't aggregated usage yet (early-cancelled turns).
 type codexUsageInfo struct {
@@ -225,6 +279,87 @@ func (codex) Parse(_ context.Context, path string, emit func(Record) error) erro
 		r := *pending
 		pending = nil
 		return emit(r)
+	}
+
+	extras := func() map[string]any {
+		return codexExtras(modelProvider, sandboxType, networkAccess, networkAccessSet,
+			collabMode, reasoningEffort, personality, timezone)
+	}
+
+	// last holds the previous record's role, text and encoding, so a
+	// turn written in both the legacy and the current encoding is kept
+	// once. A repeat in the same encoding (the user sending "continue"
+	// twice) is a real new turn and is kept.
+	type seen struct {
+		role   Role
+		text   string
+		legacy bool
+	}
+	var last seen
+	duplicate := func(role Role, text string, legacy bool) bool {
+		return last.role == role && last.text == text && last.legacy != legacy
+	}
+
+	// emitUser closes any pending assistant turn and emits the prompt.
+	emitUser := func(text string, legacy bool, ts time.Time, line []byte) error {
+		if err := flush(); err != nil {
+			return err
+		}
+		if text == "" || duplicate(RoleUser, text, legacy) {
+			return nil
+		}
+		last = seen{RoleUser, text, legacy}
+		return emit(Record{
+			Tool:           "codex",
+			ToolVersion:    cliVersion,
+			SessionID:      sessionID,
+			CWD:            cwd,
+			Role:           RoleUser,
+			Text:           text,
+			Timestamp:      ts,
+			LineHash:       hashLine(line),
+			PermissionMode: approvalPolicy,
+			Terminal:       originator,
+			TerminalTitle:  source,
+			Extras:         extras(),
+		})
+	}
+
+	// setAssistant buffers a final answer so the token_count that
+	// follows it can be attached before emit. Only the final-answer
+	// phase is a captured turn — "commentary" messages are progress
+	// notes that would double-count and pollute search. An absent phase
+	// (old rollouts) counts as final.
+	setAssistant := func(text, phase string, legacy bool, ts time.Time, line []byte) error {
+		if phase != "" && phase != codexPhaseFinal {
+			return nil
+		}
+		if text != "" && duplicate(RoleAssistant, text, legacy) {
+			return nil
+		}
+		if err := flush(); err != nil {
+			return err
+		}
+		if text == "" {
+			return nil
+		}
+		last = seen{RoleAssistant, text, legacy}
+		pending = &Record{
+			Tool:           "codex",
+			ToolVersion:    cliVersion,
+			SessionID:      sessionID,
+			CWD:            cwd,
+			Role:           RoleAssistant,
+			Text:           text,
+			Model:          currentModel,
+			Timestamp:      ts,
+			LineHash:       hashLine(line),
+			PermissionMode: approvalPolicy,
+			Terminal:       originator,
+			TerminalTitle:  source,
+			Extras:         extras(),
+		}
+		return nil
 	}
 
 	for scanner.Scan() {
@@ -300,60 +435,31 @@ func (codex) Parse(_ context.Context, path string, emit func(Record) error) erro
 			var ev codexEventMsg
 			_ = json.Unmarshal(env.Payload, &ev)
 			switch ev.Type {
-			case "user_message":
-				if err := flush(); err != nil {
-					return err
-				}
-				if ev.Message == "" {
-					continue
-				}
-				rec := Record{
-					Tool:           "codex",
-					ToolVersion:    cliVersion,
-					SessionID:      sessionID,
-					CWD:            cwd,
-					Role:           RoleUser,
-					Text:           ev.Message,
-					Timestamp:      ts,
-					LineHash:       hashLine(line),
-					PermissionMode: approvalPolicy,
-					Terminal:       originator,
-					TerminalTitle:  source,
-					Extras: codexExtras(modelProvider, sandboxType, networkAccess, networkAccessSet,
-						collabMode, reasoningEffort, personality, timezone),
-				}
-				if err := emit(rec); err != nil {
+			case "user_message": // Codex < 0.158
+				if err := emitUser(ev.Message, true, ts, line); err != nil {
 					return err
 				}
 
-			case "agent_message":
-				// Only treat the final-answer phase as a captured turn —
-				// intermediate "thinking" agent_messages would otherwise
-				// double-count and pollute the search index.
-				if ev.Phase != "" && ev.Phase != "final_answer" {
-					continue
-				}
-				if err := flush(); err != nil {
+			case "agent_message": // Codex < 0.158
+				if err := setAssistant(ev.Message, ev.Phase, true, ts, line); err != nil {
 					return err
 				}
-				if ev.Message == "" {
+
+			case "item_completed": // Codex 0.158+
+				var ic codexItemCompleted
+				if json.Unmarshal(env.Payload, &ic) != nil {
 					continue
 				}
-				pending = &Record{
-					Tool:           "codex",
-					ToolVersion:    cliVersion,
-					SessionID:      sessionID,
-					CWD:            cwd,
-					Role:           RoleAssistant,
-					Text:           ev.Message,
-					Model:          currentModel,
-					Timestamp:      ts,
-					LineHash:       hashLine(line),
-					PermissionMode: approvalPolicy,
-					Terminal:       originator,
-					TerminalTitle:  source,
-					Extras: codexExtras(modelProvider, sandboxType, networkAccess, networkAccessSet,
-						collabMode, reasoningEffort, personality, timezone),
+				text := codexItemText(ic.Item.Content)
+				switch ic.Item.Type {
+				case codexItemUser:
+					if err := emitUser(text, false, ts, line); err != nil {
+						return err
+					}
+				case codexItemAgent:
+					if err := setAssistant(text, ic.Item.Phase, false, ts, line); err != nil {
+						return err
+					}
 				}
 
 			case "token_count":
