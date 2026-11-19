@@ -70,24 +70,17 @@ func TestClaudePaths_RespectAILOG_CLAUDE_HOME(t *testing.T) {
 	if skills != "/fake/claude/skills" {
 		t.Fatalf("skills dir: %q", skills)
 	}
-	settings, err := config.ClaudeSettingsPath()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if settings != "/fake/claude/settings.json" {
-		t.Fatalf("settings path: %q", settings)
-	}
 }
 
 func TestClaudePaths_DefaultsToDotClaude(t *testing.T) {
 	t.Setenv("AILOG_CLAUDE_HOME", "")
 	u, _ := os.UserHomeDir()
-	settings, err := config.ClaudeSettingsPath()
+	skills, err := config.ClaudeSkillsDir()
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := filepath.Join(u, ".claude", "settings.json")
-	if settings != want {
-		t.Fatalf("got %q want %q", settings, want)
+	want := filepath.Join(u, ".claude", "skills")
+	if skills != want {
+		t.Fatalf("got %q want %q", skills, want)
 	}
 }

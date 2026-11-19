@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/khanakia/ai-logger/internal/agents"
 )
 
 // fakeSecret is a made-up token in a format redact.Scrub recognises.
@@ -72,5 +74,58 @@ func TestHookDebug_RotatesKeepingOne(t *testing.T) {
 	extra, _ := filepath.Glob(filepath.Join(home, hookLogName+".*"))
 	if len(extra) != 1 {
 		t.Fatalf("want exactly one rotated file, got %v", extra)
+	}
+}
+
+// TestHookTools_MatchRegistry keeps the static hook subtree list equal to
+// the agents whose agentio agent runs command hooks.
+func TestHookTools_MatchRegistry(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	reg, err := agents.FromOS()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, a := range reg.WithHooks() {
+		got = append(got, a.Tool)
+	}
+	if strings.Join(got, ",") != strings.Join(hookTools(), ",") {
+		t.Fatalf("WithHooks %v != hookTools %v", got, hookTools())
+	}
+}
+
+// TestHookCommandLine_Compatible pins the command line every ailog
+// release writes into settings files; changing it would orphan installed
+// hooks.
+func TestHookCommandLine_Compatible(t *testing.T) {
+	if got := hookCommandLine("/Users/alice/go/bin/ailog", "claude-code", "prompt"); got != "/Users/alice/go/bin/ailog hook claude-code prompt" {
+		t.Fatalf("got %q", got)
+	}
+	if got := hookCommandLine("/Applications/My Tools/ailog", "claude-code", "stop"); got != "'/Applications/My Tools/ailog' hook claude-code stop" {
+		t.Fatalf("got %q", got)
+	}
+	if got := hookCommandLine("/tmp/it's/ailog", "codex", "stop"); got != `'/tmp/it'\''s/ailog' hook codex stop` {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestIsAilogCommandFor(t *testing.T) {
+	cases := map[string]bool{
+		"/Users/alice/go/bin/ailog hook claude-code prompt":      true,
+		"ailog hook claude-code prompt":                          true,
+		"'/Applications/My Tools/ailog' hook claude-code prompt": true,
+		`"/opt/tools/ailog.exe" hook claude-code prompt`:         true,
+		"  /usr/local/bin/ailog hook claude-code prompt  ":       true,
+		"/usr/local/bin/ailog hook claude-code stop":             false, // other sub
+		"/usr/local/bin/ailog hook codex prompt":                 false, // other tool
+		"/usr/local/bin/notailog hook claude-code prompt":        false,
+		"echo hi; /usr/local/bin/ailog hook claude-code prompt":  false, // compound command
+		"/usr/local/bin/ailog hook claude-code prompt --verbose": false,
+		"$(which ailog) hook claude-code prompt":                 false,
+	}
+	for cmd, want := range cases {
+		if got := isAilogCommandFor(cmd, "claude-code", "prompt"); got != want {
+			t.Errorf("isAilogCommandFor(%q) = %v, want %v", cmd, got, want)
+		}
 	}
 }

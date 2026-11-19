@@ -95,16 +95,14 @@ func TestTurnIndex_AutoComputedWithinSession(t *testing.T) {
 	ctx := context.Background()
 	s := newTestStore(t)
 	sid := "sess-aaaa"
-	var ids []string
 	for i := 0; i < 3; i++ {
-		id, err := s.InsertEntry(ctx, store.InsertEntryInput{
+		_, err := s.InsertEntry(ctx, store.InsertEntryInput{
 			SessionID: sid,
 			Prompt:    "turn",
 		})
 		if err != nil {
 			t.Fatal(err)
 		}
-		ids = append(ids, id)
 	}
 	rows, err := s.SessionEntries(ctx, sid)
 	if err != nil {

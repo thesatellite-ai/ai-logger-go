@@ -29,7 +29,6 @@ func TestRoundTrip_InsertAndFTS5Search(t *testing.T) {
 		{Tool: "cursor", Project: "other", Prompt: "explain kubernetes pod lifecycle"},
 	}
 
-	var ids []string
 	for _, in := range cases {
 		id, err := s.InsertEntry(ctx, in)
 		if err != nil {
@@ -38,7 +37,6 @@ func TestRoundTrip_InsertAndFTS5Search(t *testing.T) {
 		if len(id) != 36 {
 			t.Fatalf("expected 36-char uuid, got %q", id)
 		}
-		ids = append(ids, id)
 	}
 
 	hits, err := s.Search(ctx, "race", store.SearchFilter{})

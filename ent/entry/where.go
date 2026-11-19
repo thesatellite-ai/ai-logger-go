@@ -234,6 +234,11 @@ func CreatedAt(v time.Time) predicate.Entry {
 	return predicate.Entry(sql.FieldEQ(FieldCreatedAt, v))
 }
 
+// TranscriptAt applies equality check predicate on the "transcript_at" field. It's identical to TranscriptAtEQ.
+func TranscriptAt(v time.Time) predicate.Entry {
+	return predicate.Entry(sql.FieldEQ(FieldTranscriptAt, v))
+}
+
 // ToolEQ applies the EQ predicate on the "tool" field.
 func ToolEQ(v string) predicate.Entry {
 	return predicate.Entry(sql.FieldEQ(FieldTool, v))
@@ -2212,6 +2217,56 @@ func CreatedAtLT(v time.Time) predicate.Entry {
 // CreatedAtLTE applies the LTE predicate on the "created_at" field.
 func CreatedAtLTE(v time.Time) predicate.Entry {
 	return predicate.Entry(sql.FieldLTE(FieldCreatedAt, v))
+}
+
+// TranscriptAtEQ applies the EQ predicate on the "transcript_at" field.
+func TranscriptAtEQ(v time.Time) predicate.Entry {
+	return predicate.Entry(sql.FieldEQ(FieldTranscriptAt, v))
+}
+
+// TranscriptAtNEQ applies the NEQ predicate on the "transcript_at" field.
+func TranscriptAtNEQ(v time.Time) predicate.Entry {
+	return predicate.Entry(sql.FieldNEQ(FieldTranscriptAt, v))
+}
+
+// TranscriptAtIn applies the In predicate on the "transcript_at" field.
+func TranscriptAtIn(vs ...time.Time) predicate.Entry {
+	return predicate.Entry(sql.FieldIn(FieldTranscriptAt, vs...))
+}
+
+// TranscriptAtNotIn applies the NotIn predicate on the "transcript_at" field.
+func TranscriptAtNotIn(vs ...time.Time) predicate.Entry {
+	return predicate.Entry(sql.FieldNotIn(FieldTranscriptAt, vs...))
+}
+
+// TranscriptAtGT applies the GT predicate on the "transcript_at" field.
+func TranscriptAtGT(v time.Time) predicate.Entry {
+	return predicate.Entry(sql.FieldGT(FieldTranscriptAt, v))
+}
+
+// TranscriptAtGTE applies the GTE predicate on the "transcript_at" field.
+func TranscriptAtGTE(v time.Time) predicate.Entry {
+	return predicate.Entry(sql.FieldGTE(FieldTranscriptAt, v))
+}
+
+// TranscriptAtLT applies the LT predicate on the "transcript_at" field.
+func TranscriptAtLT(v time.Time) predicate.Entry {
+	return predicate.Entry(sql.FieldLT(FieldTranscriptAt, v))
+}
+
+// TranscriptAtLTE applies the LTE predicate on the "transcript_at" field.
+func TranscriptAtLTE(v time.Time) predicate.Entry {
+	return predicate.Entry(sql.FieldLTE(FieldTranscriptAt, v))
+}
+
+// TranscriptAtIsNil applies the IsNil predicate on the "transcript_at" field.
+func TranscriptAtIsNil() predicate.Entry {
+	return predicate.Entry(sql.FieldIsNull(FieldTranscriptAt))
+}
+
+// TranscriptAtNotNil applies the NotNil predicate on the "transcript_at" field.
+func TranscriptAtNotNil() predicate.Entry {
+	return predicate.Entry(sql.FieldNotNull(FieldTranscriptAt))
 }
 
 // And groups predicates with the AND operator between them.

@@ -34,13 +34,11 @@ Windows: `irm https://raw.githubusercontent.com/thesatellite-ai/ai-logger-go/mai
 
 ```sh
 ailog init                                 # creates ~/.ailog/log.db + applies migrations
-ailog hooks install --tool claude-code     # writes hook entries into ~/.claude/settings.json
+ailog hooks install --tool claude-code     # writes hook entries into every Claude home's settings.json
 ailog skill install                        # writes SKILL.md → ~/.claude/skills/ailog/
 ```
 
-`--tool` is required on `hooks install` — no default. Known tools:
-`claude-code` (real, auto-installs into Claude's settings.json),
-`codex` + `opencode` (skeleton adapters; see [USE-CASES → backfill](./USE-CASES.md#backfilling-old-transcripts)).
+`--tool` is required on `hooks install` — no default. Agents with command hooks: `claude-code` (`settings.json` of `~/.claude` and every `~/.claude-*`), `codex` (`hooks.json` of each Codex home) and `gemini` (`~/.gemini/settings.json`). pi and opencode run no shell-command hooks; capture them with `ailog import` (see [USE-CASES → backfill](./USE-CASES.md#backfilling-old-transcripts)).
 
 Alternative skill install via skills.sh:
 
@@ -51,7 +49,7 @@ npx skills add thesatellite-ai/ai-logger-go
 ### Uninstall
 
 ```sh
-ailog hooks uninstall --tool claude-code   # surgical — only removes ailog entries from settings.json
+ailog hooks uninstall --tool claude-code   # surgical — only removes ailog entries, in every Claude home
 sudo rm /usr/local/bin/ailog
 rm -rf ~/.ailog
 ```
@@ -91,13 +89,17 @@ Output: the new entry's id (UUID v7, time-sortable).
 ### `ailog hooks`
 
 ```sh
-ailog hooks list                           # every tool adapter ailog knows about
+ailog hooks list                           # every agent ailog knows and how it is captured
 ailog hooks show --tool claude-code        # print the commands the hooks will invoke
-ailog hooks install --tool claude-code     # writes into ~/.claude/settings.json
+ailog hooks install --tool claude-code     # every Claude home (or --home DIR)
+ailog hooks install --tool codex           # <codex home>/hooks.json
+ailog hooks install --tool gemini          # ~/.gemini/settings.json (BeforeAgent / AfterAgent)
 ailog hooks uninstall                      # defaults to --tool claude-code
 ```
 
-`install` merges: it adds only ailog's own `UserPromptSubmit` and `Stop` entries and keeps every other hook, key, key order and formatting byte as it was. Running it twice changes nothing. Before any write it saves the old file as `settings.json.bak-<timestamp>`; `--dry-run` prints the diff instead of writing. `uninstall` removes only commands of the form `<path>/ailog hook claude-code <event>` (same backup and `--dry-run`); other tools' entries are preserved.
+Install and uninstall go through [agentio](https://github.com/ubgo/agentio)'s hook installer. `install` merges: it appends only ailog's prompt-submit and turn-end entries (`<bin> hook <tool> prompt|stop`, the same command line every ailog release wrote) and keeps every other hook and key as it was. Running it twice changes nothing. An ailog entry that runs a different ailog binary (`/old/path/ailog hook claude-code prompt`) is replaced by one running this binary, so the agent never runs two. Before any write the old file is saved as `<file>.agentio-bak-<timestamp>`; `--dry-run` prints the plan (entries to replace, present and to add) instead of writing. Steps ailog does not take are printed as `manual step:` (Codex: trust the new hooks on its next start; a `[features] hooks = false` in `config.toml`, which ailog never edits). `uninstall` removes only ailog's own commands, any binary path, with the same backup; other tools' entries are preserved. Both act on every home the agent has; `--home DIR` (or `AILOG_CLAUDE_HOME` for Claude) narrows to one.
+
+The Stop hook reads the transcript from the cursor the previous Stop stored for it (in `import_state`, key `hook:<transcript path>`), so each turn reads only what it appended.
 
 See `ailog hook --help` for the internal adapter surface — you
 rarely invoke these directly; the harness does via the hook config.
@@ -221,51 +223,57 @@ degrade to all-time rather than erroring.
 
 ## Import (backfill)
 
-Pull historical transcripts into ailog. Idempotent via per-line SHA
-dedup + per-file mtime watermarks — re-runs are fast.
+Pull historical transcripts into ailog. Every agent's homes and transcripts are found and read through [agentio](https://github.com/ubgo/agentio); ailog keeps the storage, redaction, dedup and pairing.
 
 ```sh
-ailog import claude-code      # walks ~/.claude/projects/**/*.jsonl
-ailog import codex            # walks ~/.codex/sessions/**/*.jsonl
-ailog import opencode         # walks ~/.local/share/opencode/storage
-ailog import all              # every registered source
+ailog import claude-code      # every Claude home (~/.claude, ~/.claude-*), subagent runs included
+ailog import codex            # every Codex home's rollouts (0.118 events and 0.158+ items)
+ailog import gemini           # Gemini CLI chats (~/.gemini/tmp/*/chats)
+ailog import pi               # pi sessions (~/.pi/agent/sessions)
+ailog import opencode         # opencode legacy storage/ tree and opencode.db
+ailog import all              # every agent
 ```
 
 | Flag | Meaning |
 |---|---|
-| `--from <path>` | Override the source's default root directory |
+| `--from <dir>` | Only the agent home at this folder (`~/.claude-work`). An older ailog's root (`~/.claude/projects`) is taken as its home. Not on `import all` |
 | `--since <RFC3339>` | Skip records older than this timestamp |
-| `--limit <n>` | Stop after importing N records |
-| `--force` | Ignore per-file mtime watermark; reparse everything |
-| `--strict` | Escalate schema-drift warnings to hard rejects on newer-than-known tool versions |
+| `--limit <n>` | Stop after importing N records (the transcript where it stopped is read again next run) |
+| `--force` | Ignore watermarks and read cursors; read every transcript from the start |
+| `--strict` | Escalate schema-drift warnings to hard rejects on newer-than-tested agent versions |
+
+Idempotency, in the order checked:
+
+1. `import_state`: per transcript, mtime + size watermark and the read cursor agentio returned. An unchanged transcript is skipped, a grown one is read from the cursor, a shrunk (rewritten) one from the start.
+2. `import_lines`: per message, two keys pointing at the same entry: the SHA-256 of the record's line (what every older ailog stored; for opencode the message file) and `msg:<tool>:<conversation>:<message id>`. A hit on either skips the turn and records the other key. A known message id with new bytes (Gemini re-appends an answer once its tokens are known) replaces the stored answer.
+3. A match on the stored rows. A prompt matches a row of the same tool and session with the same (trimmed, redacted) text stamped at the same transcript time (an earlier import), or else the row the live hook wrote for that turn: not yet linked to an import key, captured within 10 minutes of the transcript time, the nearest one. A matched hook row gets the import keys and `transcript_at` and gains only the fields it has empty (version, answer, model, usage); its own captured values are never overwritten and no second row is written. An answer matches a row of its turn already holding that text (the Stop hook's answer), else fills the turn's prompt when that has no answer yet.
+
+The 10-minute window comes from a real `log.db`: of 9,859 prompts that both a hook and an import stored, the gap was 0.09 s at the median, 19 s at the 99th percentile and 212 s at most (a prompt queued while the agent was busy).
+
+An undecodable line (a torn write, a line another tool appended) is skipped with a `warn … skipped an undecodable line` message; the turns around it are still imported. Codex commentary (progress messages, `phase: commentary`) is never stored as an answer; an answer whose token count is not written yet is held back and stored, with its usage, on the next run. An answer read in a later run than its prompt is attached to that prompt.
 
 Output per run:
 
 ```
-claude-code: 47 files (43 skipped via watermark) — 124 records
+claude-code: 2 home(s), 47 files (43 skipped via watermark) — 124 records
              (118 skipped, 4 new prompts, 2 responses attached,
              0 standalone) — drift watch: 0 suspect files
 ```
 
 ### How the drift watchdog works
 
-Each importer source declares:
+Per transcript, the driver counts answers seen vs answers carrying token usage (`Role==Assistant && TokensIn>0`). A transcript with the former but none of the latter triggers a warning. If the agent version recorded in it is newer than the version agentio's reader was tested against (`TestedMax` of each agentio agent module), it escalates: `WARN(newer-version)`. `--strict` escalates further to `REJECT` and skips stamping the watermark so a fixed reader walks the file again on the next run. Updating the agentio modules moves `TestedMax`.
 
-- **`LastKnownVersion()`** — the highest tool version whose transcript
-  shape this parser was validated against
-- **`Anchor(record)`** — a per-source "this row looks healthy" predicate
-  (today: `Role==Assistant && TokensIn>0`)
+---
 
-Per file, the driver counts anchor-eligible records (assistant rows
-seen) vs anchor-passing records (assistant rows with token usage).
-A file with the former but none of the latter triggers a warning. If
-the observed tool version exceeds `LastKnownVersion`, it escalates:
-`WARN(newer-version)`. `--strict` escalates further to `REJECT` and
-skips stamping the mtime watermark so a fixed parser can re-walk on
-next run.
+### `ailog dedupe`
 
-Bump `LastKnownVersion` in the same commit that updates the parser
-for a new transcript shape.
+```sh
+ailog dedupe --dry-run     # counts per tool, changes nothing
+ailog dedupe               # writes log.db.bak-<timestamp> first, then merges
+```
+
+Older ailog versions stored a turn twice when both the live hook and `ailog import` saw it. `dedupe` applies the importer's match rule to rows already in the database: each imported row whose prompt a live-hook row of the same session holds, captured within 10 minutes and not yet linked, is merged into that hook row (the hook row keeps its values and gains the import's keys, answer and usage where it has none; the imported row is deleted). Repeated prompts with no hook row nearby are left alone.
 
 ---
 
