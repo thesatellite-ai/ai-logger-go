@@ -211,7 +211,9 @@ func (Entry) Fields() []ent.Field {
 		// raw is no longer load-bearing for idempotency):
 		//   [live] claude-code: transcript_path string so we can re-scan
 		//          for metadata if needed
-		//   [imp]  claude-code: bare SHA-256 of the source JSONL line
+		//   [live] codex / gemini: transcript_path, as for claude-code
+		//   [imp]  claude-code / gemini / pi: bare SHA-256 of the source
+		//          JSONL line (without its line terminator)
 		//   [imp]  codex / opencode: small JSON object —
 		//          {"line_hash":"…","codex.model_provider":"openai",
 		//           "codex.sandbox_type":"workspace-write",
@@ -221,6 +223,8 @@ func (Entry) Fields() []ent.Field {
 		//          {"line_hash":"…","opencode.provider_id":"openai",
 		//           "opencode.agent":"build","opencode.mode":"build",
 		//           "opencode.project_id":"global","opencode.cost_usd":0.00119}
+		//          ("codex.personality" only on rows imported before
+		//          ailog read Codex through agentio.)
 		//          Renderers should treat raw as opaque unless they need
 		//          the namespaced extras.
 		field.Text("raw").Default(""),

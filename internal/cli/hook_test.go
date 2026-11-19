@@ -7,12 +7,11 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 
 	"github.com/khanakia/ai-logger/internal/cli"
-	"github.com/khanakia/ai-logger/internal/store"
+	tf "github.com/khanakia/ai-logger/internal/testfixtures"
 )
 
 // runCLI invokes a fresh cobra root with stdin/stdout/stderr + args,
@@ -42,6 +41,7 @@ func runCLI(t *testing.T, stdin string, args ...string) (stdout, stderr string, 
 
 func isolatedHome(t *testing.T) (dbPath string) {
 	t.Helper()
+	tf.Isolate(t)
 	home := t.TempDir()
 	t.Setenv("AILOG_HOME", home)
 	t.Setenv("AILOG_HOOK_DEBUG", "0")
@@ -196,6 +196,7 @@ func TestHooksShow_PrintsAbsolutePath(t *testing.T) {
 }
 
 func TestHooksInstall_WritesClaudeSettings(t *testing.T) {
+	tf.Isolate(t)
 	claudeHome := t.TempDir()
 	t.Setenv("AILOG_CLAUDE_HOME", claudeHome)
 	out, _, err := runCLI(t, "", "hooks", "install", "--tool", "claude-code")
@@ -224,6 +225,7 @@ func TestHooksInstall_WritesClaudeSettings(t *testing.T) {
 }
 
 func TestHooksInstall_PreservesExistingUnrelatedKeys(t *testing.T) {
+	tf.Isolate(t)
 	claudeHome := t.TempDir()
 	t.Setenv("AILOG_CLAUDE_HOME", claudeHome)
 	// Seed an existing settings.json with some unrelated config.
@@ -264,6 +266,3 @@ func TestPromptHook_EmptyPayload_NoCrash(t *testing.T) {
 		t.Fatalf("empty stdin should not error: %v", err)
 	}
 }
-
-var _ = store.InsertEntryInput{} // keep store import alive if we later add more tests
-var _ = exec.Cmd{}               // in case we want exec-based integration tests
