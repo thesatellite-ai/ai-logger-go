@@ -15,9 +15,10 @@ import (
 // under ~/.claude/projects/<encoded-cwd>/<uuid>.jsonl.
 //
 // Each line is one envelope with at least:
-//   {"type":"user"|"assistant", "sessionId":"…", "cwd":"…",
-//    "timestamp":"2025-…Z", "version":"2.1.114",
-//    "message":{...}}
+//
+//	{"type":"user"|"assistant", "sessionId":"…", "cwd":"…",
+//	 "timestamp":"2025-…Z", "version":"2.1.114",
+//	 "message":{...}}
 //
 // `message.content` is either a string or a typed-block array. For
 // assistant lines we extract `message.usage` (Anthropic-only token

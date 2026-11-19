@@ -2,15 +2,15 @@
 // "turn" — a user prompt + (eventually) the assistant response that
 // followed it. Rows arrive through three different paths:
 //
-//	1. Live hooks            (internal/cli/hook_*.go)  — UserPromptSubmit
-//	                          inserts a prompt-only row, Stop fills in the
-//	                          response + token usage. Currently real for
-//	                          claude-code; codex/opencode skeletons exist.
-//	2. Manual capture        (`ailog add`)              — single insert from
-//	                          flags / stdin.
-//	3. Backfill import       (internal/importer/*.go)   — walks each tool's
-//	                          on-disk transcript tree and replays them
-//	                          through the same store APIs the hooks use.
+//  1. Live hooks            (internal/cli/hook_*.go)  — UserPromptSubmit
+//     inserts a prompt-only row, Stop fills in the
+//     response + token usage. Currently real for
+//     claude-code; codex/opencode skeletons exist.
+//  2. Manual capture        (`ailog add`)              — single insert from
+//     flags / stdin.
+//  3. Backfill import       (internal/importer/*.go)   — walks each tool's
+//     on-disk transcript tree and replays them
+//     through the same store APIs the hooks use.
 //
 // "Source" notes on each field below tell you which path / upstream tool
 // produces the data, so you can tell at a glance whether it's universally

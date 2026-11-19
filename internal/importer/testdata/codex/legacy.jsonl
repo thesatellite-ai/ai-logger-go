@@ -1,0 +1,9 @@
+{"timestamp":"2025-09-01T08:00:00.000Z","type":"session_meta","payload":{"id":"aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee","cwd":"/work/old","cli_version":"0.118.0-alpha.2","originator":"codex_cli_rs","source":"cli","model_provider":"openai"}}
+{"timestamp":"2025-09-01T08:00:00.100Z","type":"turn_context","payload":{"cwd":"/work/old","model":"gpt-test-0","approval_policy":"never","sandbox_policy":{"type":"read-only"}}}
+{"timestamp":"2025-09-01T08:00:00.200Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"What is two plus two?"}]}}
+{"timestamp":"2025-09-01T08:00:00.300Z","type":"event_msg","payload":{"type":"user_message","message":"What is two plus two?"}}
+{"timestamp":"2025-09-01T08:00:01.000Z","type":"event_msg","payload":{"type":"agent_message","message":"Thinking about arithmetic.","phase":"commentary"}}
+{"timestamp":"2025-09-01T08:00:02.000Z","type":"event_msg","payload":{"type":"agent_message","message":"Four."}}
+{"timestamp":"2025-09-01T08:00:02.100Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":50,"cached_input_tokens":10,"output_tokens":2,"reasoning_output_tokens":1,"total_tokens":52}}}}
+{"timestamp":"2025-09-01T08:00:03.000Z","type":"event_msg","payload":{"type":"user_message","message":"Thanks"}}
+{"timestamp":"2025-09-01T08:00:04.000Z","type":"event_msg","payload":{"type":"agent_message","message":"You are welcome.","phase":"final_answer"}}

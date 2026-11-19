@@ -127,10 +127,10 @@ func Run(ctx context.Context, st *store.Store, src Source, opts Options) (Stats,
 		stats.FilesScanned++
 
 		var (
-			fileRecords      int
-			fileAnchorOK     int    // records where Source.Anchor returned true
-			fileAnchorElig   int    // records where Anchor *should* fire (assistant-with-text etc.)
-			fileMaxVer       string // highest tool_version observed in this file
+			fileRecords    int
+			fileAnchorOK   int    // records where Source.Anchor returned true
+			fileAnchorElig int    // records where Anchor *should* fire (assistant-with-text etc.)
+			fileMaxVer     string // highest tool_version observed in this file
 		)
 		parseErr := src.Parse(ctx, f, func(r Record) error {
 			stats.Records++
