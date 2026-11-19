@@ -1,17 +1,20 @@
 // Package cli — `ailog import` is a tool-agnostic backfill driver.
-// Each upstream tool is a subcommand backed by an importer.Source
-// registered in internal/importer; this file is the cobra wiring +
-// flag plumbing.
+// Each agent ailog knows (internal/agents, backed by agentio) is a
+// subcommand; this file is the cobra wiring + flag plumbing.
 //
-//	ailog import claude-code [--from PATH]
-//	ailog import codex      [--from PATH]
-//	ailog import opencode   [--from PATH]
-//	ailog import all        [--force] [--since RFC3339] [--limit N]
+//	ailog import claude-code [--from HOME]
+//	ailog import codex       [--from HOME]
+//	ailog import gemini      [--from HOME]
+//	ailog import pi          [--from HOME]
+//	ailog import opencode    [--from HOME]
+//	ailog import all         [--force] [--since RFC3339] [--limit N]
 //
-// Idempotency comes from the store's import_lines table (per-line SHA
-// dedup) and import_state table (per-file mtime watermark). Re-running
-// the same command is cheap and safe; pass --force to bypass the
-// per-file fast path when re-parsing is intentional.
+// Without --from every home of the agent is read (for Claude Code
+// ~/.claude and every ~/.claude-*; AILOG_CLAUDE_HOME narrows it to one).
+// Idempotency comes from the store's import_lines table (per-message
+// dedup keys) and import_state table (per-transcript watermark and read
+// cursor). Re-running the same command is cheap and safe; pass --force to
+// read every transcript from the start when re-parsing is intentional.
 package cli
 
 import (
@@ -19,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/khanakia/ai-logger/internal/agents"
 	"github.com/khanakia/ai-logger/internal/importer"
 	"github.com/spf13/cobra"
 )
@@ -37,28 +41,35 @@ func newImportCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "import",
 		Short: "Backfill historical entries from a tool's transcript files",
-		Long: "Each subcommand pulls entries from a different tool's native " +
-			"transcript format. Re-runs are idempotent (per-line dedup) and fast " +
-			"(per-file mtime watermarks). Use `import all` to run every source.",
+		Long: "Each subcommand reads one agent's transcripts in every home it has " +
+			"(through agentio). Re-runs are idempotent (per-message dedup) and fast " +
+			"(per-transcript watermarks and read cursors). Use `import all` to run every agent.",
 	}
 
-	for _, src := range importer.All() {
-		cmd.AddCommand(newImportSourceCmd(src))
+	for _, tool := range agents.ToolNames() {
+		cmd.AddCommand(newImportSourceCmd(tool))
 	}
 	cmd.AddCommand(newImportAllCmd())
 	return cmd
 }
 
-// newImportSourceCmd builds one `ailog import <name>` subcommand bound
-// to a specific Source. The flag set is identical across sources so
-// muscle memory transfers.
-func newImportSourceCmd(src importer.Source) *cobra.Command {
+// newImportSourceCmd builds one `ailog import <tool>` subcommand. The
+// flag set is identical across agents so muscle memory transfers.
+func newImportSourceCmd(tool string) *cobra.Command {
 	var f importFlags
 	cmd := &cobra.Command{
-		Use:   src.Name(),
-		Short: fmt.Sprintf("Import %s transcripts (default root: %s)", src.Name(), src.DefaultRoot()),
+		Use:   tool,
+		Short: fmt.Sprintf("Import %s transcripts from every home (or --from HOME)", tool),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+			reg, err := agents.FromOS()
+			if err != nil {
+				return err
+			}
+			ag, ok := reg.ByTool(tool)
+			if !ok {
+				return fmt.Errorf("unknown agent %q", tool)
+			}
 			st, err := openStore(ctx)
 			if err != nil {
 				return err
@@ -70,43 +81,42 @@ func newImportSourceCmd(src importer.Source) *cobra.Command {
 				return err
 			}
 
-			stats, err := importer.Run(ctx, st, src, opts)
-			printImportStats(cmd, src.Name(), stats)
+			stats, err := importer.Run(ctx, st, ag, opts)
+			printImportStats(cmd, tool, stats)
 			return err
 		},
 	}
-	bindImportFlags(cmd, &f, src)
+	bindImportFlags(cmd, &f, true)
 	return cmd
 }
 
-// newImportAllCmd runs every registered source in turn, sharing one
-// store handle. Stops on the first error so partial-state failures
-// surface loudly.
+// newImportAllCmd runs every agent in turn, sharing one store handle.
+// Stops on the first error so partial-state failures surface loudly.
 func newImportAllCmd() *cobra.Command {
 	var f importFlags
 	cmd := &cobra.Command{
 		Use:   "all",
-		Short: "Run every registered import source against its default root",
+		Short: "Import every agent's transcripts from every home",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
+			reg, err := agents.FromOS()
+			if err != nil {
+				return err
+			}
 			st, err := openStore(ctx)
 			if err != nil {
 				return err
 			}
 			defer func() { _ = st.Close() }()
 
-			for _, src := range importer.All() {
+			for _, ag := range reg.All() {
 				opts, err := buildImportOptions(f, cmd)
 				if err != nil {
 					return err
 				}
-				// `all` ignores --from on purpose — each source's
-				// DefaultRoot() is correct, and one path can't be right
-				// for every tool.
-				opts.Root = ""
-				fmt.Fprintf(cmd.OutOrStdout(), "→ %s\n", src.Name())
-				stats, err := importer.Run(ctx, st, src, opts)
-				printImportStats(cmd, src.Name(), stats)
+				fmt.Fprintf(cmd.OutOrStdout(), "→ %s\n", ag.Tool)
+				stats, err := importer.Run(ctx, st, ag, opts)
+				printImportStats(cmd, ag.Tool, stats)
 				if err != nil {
 					return err
 				}
@@ -114,22 +124,20 @@ func newImportAllCmd() *cobra.Command {
 			return nil
 		},
 	}
-	bindImportFlags(cmd, &f, nil)
+	bindImportFlags(cmd, &f, false)
 	return cmd
 }
 
-// bindImportFlags attaches the shared flag set to a subcommand. When
-// src is non-nil, --from defaults to the source's DefaultRoot in the
-// help text so users see what they'd get.
-func bindImportFlags(cmd *cobra.Command, f *importFlags, src importer.Source) {
-	defaultFrom := ""
-	if src != nil {
-		defaultFrom = src.DefaultRoot()
+// bindImportFlags attaches the shared flag set to a subcommand. --from
+// exists only on a per-agent subcommand: one folder can't be a home of
+// every agent, so `all` always reads every home.
+func bindImportFlags(cmd *cobra.Command, f *importFlags, withFrom bool) {
+	if withFrom {
+		cmd.Flags().StringVar(&f.From, "from", "", "read only the agent home at this folder (e.g. ~/.claude-work; default every home)")
 	}
-	cmd.Flags().StringVar(&f.From, "from", "", fmt.Sprintf("transcript root to scan (default %s)", defaultFrom))
 	cmd.Flags().StringVar(&f.Since, "since", "", "skip records older than this RFC3339 timestamp")
 	cmd.Flags().IntVar(&f.Limit, "limit", 0, "stop after importing N records (0 = no cap)")
-	cmd.Flags().BoolVar(&f.Force, "force", false, "ignore per-file mtime watermark and re-parse everything")
+	cmd.Flags().BoolVar(&f.Force, "force", false, "ignore watermarks and read cursors; read every transcript from the start")
 	cmd.Flags().BoolVar(&f.Strict, "strict", false, "treat upstream schema drift on a newer-than-known tool version as a hard reject")
 }
 
@@ -137,7 +145,7 @@ func bindImportFlags(cmd *cobra.Command, f *importFlags, src importer.Source) {
 // the cobra writer for verbose output and validating --since.
 func buildImportOptions(f importFlags, cmd *cobra.Command) (importer.Options, error) {
 	opts := importer.Options{
-		Root:    f.From,
+		Home:    f.From,
 		Limit:   f.Limit,
 		Force:   f.Force,
 		Strict:  f.Strict,
@@ -158,13 +166,19 @@ func buildImportOptions(f importFlags, cmd *cobra.Command) (importer.Options, er
 // count is appended only when non-zero so healthy runs stay quiet.
 func printImportStats(cmd *cobra.Command, name string, st importer.Stats) {
 	tail := ""
+	if st.Linked > 0 {
+		tail += fmt.Sprintf(" — %d prompt(s) linked to live-hook rows", st.Linked)
+	}
+	if st.BadLines > 0 {
+		tail += fmt.Sprintf(" — %d undecodable line(s) skipped", st.BadLines)
+	}
 	if st.FilesSuspect > 0 {
-		tail = fmt.Sprintf(" — drift watch: %d suspect file(s)", st.FilesSuspect)
+		tail += fmt.Sprintf(" — drift watch: %d suspect file(s)", st.FilesSuspect)
 	}
 	fmt.Fprintf(cmd.OutOrStdout(),
-		"%s: %d files (%d skipped via watermark) — %d records (%d skipped, %d new prompts, %d responses attached, %d standalone)%s\n",
+		"%s: %d home(s), %d files (%d skipped via watermark) — %d records (%d skipped, %d new prompts, %d responses attached, %d standalone)%s\n",
 		name,
-		st.Files, st.FilesSkipped,
+		st.Homes, st.Files, st.FilesSkipped,
 		st.Records, st.RecordsSkipped, st.Inserted, st.Attached, st.Standalone,
 		tail,
 	)

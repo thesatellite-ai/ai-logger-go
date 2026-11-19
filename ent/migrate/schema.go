@@ -46,6 +46,7 @@ var (
 		{Name: "starred", Type: field.TypeBool, Default: false},
 		{Name: "notes", Type: field.TypeString, Size: 2147483647, Default: ""},
 		{Name: "created_at", Type: field.TypeTime},
+		{Name: "transcript_at", Type: field.TypeTime, Nullable: true},
 	}
 	// EntriesTable holds the schema information for the "entries" table.
 	EntriesTable = &schema.Table{

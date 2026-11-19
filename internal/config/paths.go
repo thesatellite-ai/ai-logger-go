@@ -52,15 +52,3 @@ func ClaudeSkillsDir() (string, error) {
 	}
 	return filepath.Join(u, ".claude", "skills"), nil
 }
-
-// ClaudeSettingsPath returns path to ~/.claude/settings.json.
-func ClaudeSettingsPath() (string, error) {
-	if v := os.Getenv("AILOG_CLAUDE_HOME"); v != "" {
-		return filepath.Join(v, "settings.json"), nil
-	}
-	u, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(u, ".claude", "settings.json"), nil
-}

@@ -211,7 +211,9 @@ func (Entry) Fields() []ent.Field {
 		// raw is no longer load-bearing for idempotency):
 		//   [live] claude-code: transcript_path string so we can re-scan
 		//          for metadata if needed
-		//   [imp]  claude-code: bare SHA-256 of the source JSONL line
+		//   [live] codex / gemini: transcript_path, as for claude-code
+		//   [imp]  claude-code / gemini / pi: bare SHA-256 of the source
+		//          JSONL line (without its line terminator)
 		//   [imp]  codex / opencode: small JSON object —
 		//          {"line_hash":"…","codex.model_provider":"openai",
 		//           "codex.sandbox_type":"workspace-write",
@@ -320,6 +322,15 @@ func (Entry) Fields() []ent.Field {
 		// Immutable() prevents updates, but Create accepts an explicit
 		// SetCreatedAt(t) — that's how backfill keeps historical dates.
 		field.Time("created_at").Default(time.Now).Immutable(),
+
+		// When the agent wrote this turn into its transcript, as the
+		// transcript records it. NULL for a row only a live hook wrote.
+		// Source:
+		//   [imp]  every imported row (same instant as created_at)
+		//   [link] a live-hook row the importer matched to its transcript
+		//          turn keeps its own capture created_at and gets this
+		//          (internal/importer, hook-row claim)
+		field.Time("transcript_at").Optional().Nillable(),
 	}
 }
 
