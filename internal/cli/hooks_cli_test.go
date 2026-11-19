@@ -5,12 +5,15 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	tf "github.com/khanakia/ai-logger/internal/testfixtures"
 )
 
 // seedForeign writes a settings.json carrying other tools' hooks on
 // ailog's events and returns its path and bytes.
 func seedForeign(t *testing.T) (string, []byte) {
 	t.Helper()
+	tf.Isolate(t)
 	claudeHome := t.TempDir()
 	t.Setenv("AILOG_CLAUDE_HOME", claudeHome)
 	path := filepath.Join(claudeHome, "settings.json")
@@ -48,7 +51,7 @@ func seedForeign(t *testing.T) (string, []byte) {
 
 func backups(t *testing.T, path string) []string {
 	t.Helper()
-	m, err := filepath.Glob(path + ".bak-*")
+	m, err := filepath.Glob(path + ".agentio-bak-*")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,12 +111,9 @@ func TestHooksInstall_DryRunWritesNothing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out, "+") || !strings.Contains(out, "dry run: would add Stop, UserPromptSubmit") {
-		t.Fatalf("dry-run output: %q", out)
-	}
-	for _, line := range strings.Split(out, "\n") {
-		if strings.HasPrefix(line, "-") && !strings.HasPrefix(line, "---") {
-			t.Fatalf("dry run shows a removed line: %q", line)
+	for _, want := range []string{"add     UserPromptSubmit", "add     Stop", "hook claude-code prompt", "dry run: nothing written"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("dry-run output lacks %q:\n%s", want, out)
 		}
 	}
 	now, _ := os.ReadFile(path)
@@ -123,6 +123,7 @@ func TestHooksInstall_DryRunWritesNothing(t *testing.T) {
 }
 
 func TestHooksInstall_InvalidJSONLeftUntouched(t *testing.T) {
+	tf.Isolate(t)
 	claudeHome := t.TempDir()
 	t.Setenv("AILOG_CLAUDE_HOME", claudeHome)
 	path := filepath.Join(claudeHome, "settings.json")

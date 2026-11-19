@@ -1,6 +1,6 @@
 # ailog
 
-> A local, searchable log of every AI prompt. ailog captures every prompt and response automatically across Claude Code, OpenAI Codex, and opencode — tagged with project, git branch, tool, model, and token usage, and kept locally in SQLite + FTS5. No cloud, no telemetry.
+> A local, searchable log of every AI prompt. ailog captures every prompt and response automatically across Claude Code, OpenAI Codex, Gemini CLI, pi and opencode — tagged with project, git branch, tool, model, and token usage, and kept locally in SQLite + FTS5. No cloud, no telemetry.
 
 ailog is open source (thesatellite-ai/ai-logger-go). Everything runs locally; nothing is sent to the cloud.
 

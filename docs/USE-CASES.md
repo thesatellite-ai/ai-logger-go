@@ -93,11 +93,13 @@ owns its own transcript format in its own corner of disk. None of
 them talk to the others. A question you answered in Claude is
 invisible from Codex the next day.
 
-**The fix.** ailog imports from all three into one index:
+**The fix.** ailog imports from every agent into one index:
 
 ```sh
 ailog import claude-code   # live hook captures future turns; this backfills history
 ailog import codex
+ailog import gemini
+ailog import pi
 ailog import opencode
 ailog import all           # all of the above
 ```

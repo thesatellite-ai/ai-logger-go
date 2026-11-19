@@ -1,188 +1,182 @@
-// Package importer is the home for `ailog import`'s tool-agnostic
-// backfill machinery. Each upstream tool (claude-code, codex, opencode,
-// …) registers a Source — a four-method contract that turns a
-// directory of native transcripts into a stream of normalized Records
-// the store can consume.
+// Package importer is `ailog import`'s backfill driver. It reads every
+// transcript of an agent's homes through agentio (internal/agents) and
+// writes each turn into the store with ailog's own policy: redaction,
+// dedup, pairing a prompt with its answer, project resolution and the
+// drift watchdog. It knows no vendor transcript format.
 //
-// The driver in import.go walks each Source's Discover output, runs
-// Parse per file, normalizes each Record into a store.InsertEntryInput
-// (or AttachResponseInput for the assistant side of a turn), and uses
-// the store's import_lines table for per-line idempotency. import_state
-// gives the per-file mtime watermark so re-runs over a huge transcript
-// tree are cheap.
+// Idempotency, in the order the driver checks it (the authoritative
+// mechanism is the dedup table, the watermark only saves work):
 //
-// Adding a tool ⇒ add one file with a Source implementation and call
-// Register() in init().
+//  1. import_state — per-transcript mtime+size watermark and read cursor.
+//     An unchanged file is skipped; a grown one is read from the cursor
+//     the last read returned. --force reads every file from the start.
+//  2. import_lines — per-message dedup keys: the SHA-256 of the record's
+//     bytes (agentio Turn.Raw; the key every older ailog wrote) and the
+//     vendor message id (agentio Turn.ID). A hit on either skips the turn
+//     and records the other key for the same entry.
+//  3. A last-resort match on the stored rows (same tool, session,
+//     transcript time and text; for an answer, the latest prompt of the
+//     session already holding that text), so a turn stored under a key
+//     the current reader no longer produces is not written twice.
 package importer
 
 import (
-	"context"
-	"fmt"
-	"sort"
-	"sync"
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"time"
+
+	"github.com/ubgo/agentio"
+
+	"github.com/khanakia/ai-logger/internal/agents"
 )
 
 // Role distinguishes the user's prompt side of a turn from the
-// assistant's response side. Sources MUST emit one Record per side so
-// the importer can wire up turn-pairing the same way the live hooks do.
+// assistant's response side.
 type Role string
 
+// Role values.
 const (
 	RoleUser      Role = "user"
 	RoleAssistant Role = "assistant"
 )
 
-// Record is one normalized message extracted from a transcript file.
-// Sources fill in only what's actually present in their wire format;
-// downstream code treats zero values as "unknown".
-//
-// LineHash MUST uniquely identify the source line (a SHA-256 of the
-// raw bytes is what every concrete Source uses). It's the dedup key
-// stored in import_lines.
+// msgKeyPrefix starts a message-id dedup key in import_lines.
+const msgKeyPrefix = "msg:"
+
+// Record is one normalized message ready to store: an agentio.Turn plus
+// the transcript it came from and the vendor annotation.
 type Record struct {
-	Tool        string    // upstream tool name, e.g. "claude-code"
-	ToolVersion string    // when present in the transcript line
-	SessionID   string    // tool's native session id (uuid for claude-code)
-	SessionName string    // human-friendly title (opencode emits this; others rarely)
-	CWD         string    // working directory captured by the tool
+	Tool        string    // stored tool name, e.g. "claude-code"
+	ToolVersion string    // agent version that wrote the record
+	SessionID   string    // the agent's conversation id
+	SessionName string    // conversation title (agents with UseTitle)
+	CWD         string    // working directory the agent recorded
 	Role        Role      // user | assistant
-	Text        string    // flattened message text
+	Text        string    // message text
 	Model       string    // assistant model id
 	StopReason  string    // assistant stop reason
-	Timestamp   time.Time // original transcript timestamp (zero ⇒ unknown)
-	LineHash    string    // SHA-256 of raw line bytes (idempotency key)
-	SourceFile  string    // absolute path to the transcript that produced this
+	Timestamp   time.Time // transcript timestamp (zero = unknown)
+	// LineHash is the SHA-256 hex of the record's bytes (recordKey): the
+	// dedup key every row imported so far carries.
+	LineHash string
+	// MsgKey is the message-id dedup key; "" when the format has no id.
+	MsgKey string
+	// Source is the transcript's import key (path or database session).
+	Source string
 
-	// Token usage — populated where the tool emits it (mostly Anthropic).
+	// Token usage; reasoning tokens are folded into TokensOut, providers
+	// bill them as output.
 	TokensIn         int
 	TokensOut        int
 	TokensCacheRead  int
 	TokensCacheWrite int
 
-	// PermissionMode — claude-code: default|acceptEdits|bypassPermissions|plan
-	// codex: approval_policy (on-request|never|unless-trusted) — same intent.
+	// PermissionMode, Terminal, TerminalTitle and Extras come from the
+	// agent's Annotation (agents.Annotation).
 	PermissionMode string
-
-	// Terminal / TerminalTitle — Codex stamps the host application
-	// (Codex Desktop / CLI) and embedding context (vscode / terminal)
-	// per session. We stash them in the matching schema columns since
-	// they describe the same idea as the live-capture env fields.
-	Terminal      string
-	TerminalTitle string
-
-	// Extras — arbitrary tool-specific metadata that has no neutral
-	// home in InsertEntryInput. Sources stuff small string-keyed values
-	// here (model_provider, sandbox_type, reasoning_effort, …) and the
-	// driver encodes them as JSON into the `raw` column. Skipped when
-	// nil/empty.
-	Extras map[string]any
+	Terminal       string
+	TerminalTitle  string
+	Extras         map[string]any
 }
 
-// Source is the per-tool import contract.
-//
-// Implementations must be cheap to construct (no I/O in the
-// constructor) — Discover/Parse do all the work and are called by the
-// driver only when the user actually runs `ailog import <name>`.
-type Source interface {
-	// Name is the user-facing subcommand identifier ("claude-code",
-	// "codex", …). Must be stable; it appears in URLs / dedup keys.
-	Name() string
-
-	// DefaultRoot is where the source's transcripts live by default.
-	// Returned as an OS-absolute path with $HOME expanded. Sources
-	// should use a helper like expandHome("~/.claude/projects").
-	DefaultRoot() string
-
-	// Discover walks `root` and returns every transcript file the
-	// source can parse. Order is irrelevant (the driver sorts by
-	// mtime), but stability across calls is helpful for debugging.
-	Discover(ctx context.Context, root string) ([]string, error)
-
-	// Parse opens one file and emits Records via the callback. Returning
-	// non-nil from emit aborts the parse early (used to support --limit).
-	//
-	// Sources MUST compute a stable LineHash per emitted record — the
-	// driver will use it to dedup against the store's import_lines.
-	Parse(ctx context.Context, path string, emit func(Record) error) error
-
-	// LastKnownVersion is the highest upstream tool version this
-	// parser has been validated against. Empty string disables the
-	// drift watchdog. The driver compares this against the version
-	// stamped on each emitted Record (Record.ToolVersion); when a
-	// transcript reports a *higher* version AND the file's anchor
-	// checks fail, the driver treats it as schema drift and skips
-	// recording the file's mtime watermark so the next run retries.
-	//
-	// Bump this constant in the same PR that updates the parser to
-	// handle a new transcript shape.
-	LastKnownVersion() string
-
-	// Anchor is the per-source "this row looks healthy" predicate used
-	// to detect silent drift. The driver counts emitted Records per
-	// file and how many of them passed Anchor; if Anchor never returns
-	// true on a file with at least one *anchor-eligible* record, it
-	// emits a warning ("zero rows passed the sanity check — likely
-	// schema drift").
-	//
-	// Each source defines what "eligible" means by returning true only
-	// for records it can confidently judge. A typical implementation
-	// gates on Role==Assistant + TokensIn>0 — assistant records that
-	// carry token usage are universally available across our supported
-	// providers, so a file with assistants but zero usage suggests
-	// usage.* got renamed upstream.
-	Anchor(r Record) bool
-}
-
-// registry holds every registered Source by name. Concurrent reads
-// dominate so an RWMutex would be overkill; the registry is populated
-// at init() and never mutated thereafter.
-var (
-	regMu   sync.Mutex
-	sources = map[string]Source{}
-)
-
-// Register adds a Source to the global registry. Panics on duplicate
-// names (programming error — caught at startup).
-func Register(s Source) {
-	regMu.Lock()
-	defer regMu.Unlock()
-	name := s.Name()
-	if _, ok := sources[name]; ok {
-		panic(fmt.Sprintf("importer: duplicate source registration %q", name))
+// recordOf maps one agentio turn of transcript t to a Record. ok=false for
+// turns ailog does not store: interim progress messages (Codex
+// commentary) and turns without text (a tool-only assistant step).
+func recordOf(a agents.Agent, t agents.Transcript, turn agentio.Turn, ann agents.Annotation) (Record, bool) {
+	if turn.Interim || turn.Text == "" {
+		return Record{}, false
 	}
-	sources[name] = s
-}
-
-// Lookup returns the named source, or (nil, false) when missing.
-func Lookup(name string) (Source, bool) {
-	regMu.Lock()
-	defer regMu.Unlock()
-	s, ok := sources[name]
-	return s, ok
-}
-
-// All returns every registered source, sorted by name. Useful for
-// `ailog import all` and `--help` enumeration.
-func All() []Source {
-	regMu.Lock()
-	defer regMu.Unlock()
-	out := make([]Source, 0, len(sources))
-	for _, s := range sources {
-		out = append(out, s)
+	var role Role
+	switch turn.Role {
+	case agentio.RoleUser:
+		role = RoleUser
+	case agentio.RoleAssistant:
+		role = RoleAssistant
+	default:
+		return Record{}, false
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name() < out[j].Name() })
-	return out
+	r := Record{
+		Tool:           a.Tool,
+		ToolVersion:    turn.AgentVersion,
+		SessionID:      firstNonEmpty(turn.ConversationID, t.ConversationID),
+		CWD:            firstNonEmpty(turn.Dir, t.Dir),
+		Role:           role,
+		Text:           turn.Text,
+		Timestamp:      turn.Time,
+		Source:         t.Key,
+		PermissionMode: ann.PermissionMode,
+		Terminal:       ann.Terminal,
+		TerminalTitle:  ann.TerminalTitle,
+		Extras:         ann.Extras,
+	}
+	if a.UseTitle {
+		r.SessionName = t.Title
+	}
+	if len(turn.Raw) > 0 {
+		r.LineHash = recordKey(turn.Raw, a.WholeRecordKey)
+	}
+	if turn.ID != "" {
+		r.MsgKey = msgKeyPrefix + a.Tool + ":" + r.SessionID + ":" + turn.ID
+	}
+	if role == RoleAssistant {
+		r.Model = firstNonEmpty(ann.Model, turn.Model)
+		r.StopReason = turn.StopReason
+		if tk := turn.Tokens; tk != nil {
+			r.TokensIn = int(tk.Input)
+			r.TokensOut = int(tk.Output + tk.Reasoning)
+			r.TokensCacheRead = int(tk.CachedInput)
+			r.TokensCacheWrite = int(tk.CacheWrite)
+		}
+	}
+	return r, true
 }
 
-// Names returns the registered source names, sorted. For help text.
-func Names() []string {
-	regMu.Lock()
-	defer regMu.Unlock()
-	out := make([]string, 0, len(sources))
-	for name := range sources {
-		out = append(out, name)
+// anchor is the drift watchdog's "this answer looks healthy" check: an
+// assistant record carrying input tokens. Every supported agent writes
+// usage with its answers, so a transcript whose answers all lack it most
+// likely means the vendor renamed the usage fields.
+func anchor(r Record) bool { return r.Role == RoleAssistant && r.TokensIn > 0 }
+
+// recordKey is the legacy dedup key of a record: the SHA-256 hex of its
+// bytes as older ailog read them. For a JSONL line that is the line
+// without its terminator (bufio.ScanLines drops "\n" and a trailing
+// "\r"); agentio's Turn.Raw keeps the terminator for some agents (Claude)
+// and not for others (Codex), so it is cut here. whole hashes raw as is
+// (opencode's one-file-per-message records).
+func recordKey(raw []byte, whole bool) string {
+	if !whole {
+		raw = bytes.TrimRight(raw, "\r\n")
 	}
-	sort.Strings(out)
-	return out
+	return hashBytes(raw)
+}
+
+// hashBytes is the SHA-256 hex of b.
+func hashBytes(b []byte) string {
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
+}
+
+// firstNonEmpty returns the first non-empty string.
+func firstNonEmpty(vs ...string) string {
+	for _, v := range vs {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// newerThan reports whether version v is newer than tested (agentio
+// version order); false when either does not parse.
+func newerThan(v, tested string) bool {
+	a, ok := agentio.ParseVersion(v)
+	if !ok {
+		return false
+	}
+	b, ok := agentio.ParseVersion(tested)
+	if !ok {
+		return false
+	}
+	return a.Compare(b) > 0
 }

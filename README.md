@@ -59,9 +59,7 @@ reading what you wrote three months ago.
 
 ### What you get
 
-- **Zero-friction capture.** Live hooks on Claude Code log every
-  `UserPromptSubmit` + `Stop` event automatically. Codex / opencode
-  get backfilled via `ailog import`.
+- **Zero-friction capture.** Live hooks on Claude Code, Codex and Gemini CLI log every prompt and answer automatically, in every home each agent has (`~/.claude`, `~/.claude-work`, …). pi and opencode (and any history from before the hooks) are backfilled with `ailog import`.
 - **Full-text search across everything.** One index, every tool,
   every project. Filter by `--project`, `--tool`, `--branch`,
   `--session`, `--since 7d` — any combination.
@@ -145,10 +143,7 @@ ailog hooks install --tool claude-code      # auto-log every Claude Code turn
 ailog skill install                         # let Claude Code search your past prompts
 ```
 
-`--tool` on `hooks install` is required (prevents silent "which tool
-did I mean" confusion). Current adapters: `claude-code` (real),
-`codex` / `opencode` (payload-adapter skeletons — backfill via
-`ailog import` instead until those CLIs ship a hook schema).
+`--tool` on `hooks install` is required (prevents silent "which tool did I mean" confusion). Agents with command hooks: `claude-code`, `codex` and `gemini`; `ailog hooks list` shows every agent and how it is captured. Install covers every home the agent has (for Claude Code `~/.claude` and every `~/.claude-*`; `--home DIR` or `AILOG_CLAUDE_HOME` narrows it to one). It merges into the agent's settings file: other hooks and keys stay as they are, a backup (`<file>.agentio-bak-<timestamp>`) is written first, a second run changes nothing, and an ailog entry that runs another ailog binary is replaced by this one. `--dry-run` prints the plan. Codex may ask you to trust the new hooks the next time it starts (install prints that step).
 
 Restart Claude Code. Done — every prompt and response now logs
 automatically with project, git, and session context. Nothing to
@@ -156,19 +151,19 @@ remember in-session.
 
 ### Backfill from existing transcripts
 
-If you already have Claude Code / Codex / opencode conversation history
-on disk, import it into ailog in one shot:
+If you already have Claude Code / Codex / Gemini CLI / pi / opencode conversation history on disk, import it into ailog in one shot:
 
 ```bash
-ailog import claude-code    # walks ~/.claude/projects/**/*.jsonl
-ailog import codex          # walks ~/.codex/sessions/**/*.jsonl
-ailog import opencode       # walks ~/.local/share/opencode/storage
+ailog import claude-code    # every Claude Code home: ~/.claude, ~/.claude-* (incl. subagent runs)
+ailog import codex          # every Codex home: ~/.codex/sessions rollouts
+ailog import gemini         # ~/.gemini chats
+ailog import pi             # ~/.pi/agent sessions
+ailog import opencode       # ~/.local/share/opencode: legacy storage/ and opencode.db
 ailog import all            # all of the above
+ailog import claude-code --from ~/.claude-work   # only one home
 ```
 
-Per-line SHA dedup + per-file mtime watermarks make re-runs idempotent
-and cheap. See [docs/USAGE.md](./docs/USAGE.md) for `--strict`,
-`--force`, `--since` and the drift-detection mechanism.
+Transcripts are found and read through [agentio](https://github.com/ubgo/agentio). Per-message dedup keys plus per-transcript watermarks and read cursors make re-runs idempotent and cheap: a grown transcript is read from where the last run stopped. Rows imported by older ailog versions are recognised, never written twice. See [docs/USAGE.md](./docs/USAGE.md) for `--strict`, `--force`, `--since` and the drift-detection mechanism.
 
 ### Skill install via [skills.sh](https://skills.sh/) (alternative)
 
@@ -193,7 +188,7 @@ ailog templates                          # list starred
 ailog tag 019da607-dfac debugging,race
 ailog stats                              # counts per tool / project / session
 ailog export --format md --since 30d     # dump to markdown
-ailog import                             # backfill from past Claude Code sessions
+ailog import all                         # backfill from every agent's past sessions
 ailog redact <id>                        # scrub bodies, keep metadata
 ```
 
@@ -223,7 +218,7 @@ ailog add --tool cursor --session $ID --prompt "..."
 No. Everything is stored in a local SQLite database (`~/.ailog/log.db`, `0600`, in a `0700` dir). There is no network, no cloud, and no telemetry.
 
 **Which tools does it capture?**
-Claude Code automatically via live hooks; OpenAI Codex and opencode via `ailog import` (and adapters as their hook schemas ship). Any other tool can be logged with `ailog add --tool <name>`.
+Claude Code, OpenAI Codex and Gemini CLI automatically via live hooks; pi and opencode via `ailog import` (neither runs shell-command hooks). Any other tool can be logged with `ailog add --tool <name>`.
 
 **Do I have to remember to log anything?**
 No. Once `ailog hooks install --tool claude-code` is set up, every prompt and response is captured with project, git, and session context automatically.
@@ -245,7 +240,7 @@ ailog is deliberately local — no built-in cloud sync. The database is a single
 ### macOS / Linux
 
 ```bash
-ailog hooks uninstall --tool claude-code   # first — surgically removes ailog entries from ~/.claude/settings.json (other hooks preserved)
+ailog hooks uninstall --tool claude-code   # first — removes only ailog's entries, in every Claude home (other hooks preserved); repeat for codex / gemini
 sudo rm /usr/local/bin/ailog
 rm -rf ~/.ailog
 ```

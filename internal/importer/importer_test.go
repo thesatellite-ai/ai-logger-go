@@ -3,329 +3,519 @@ package importer
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"database/sql"
+	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/ubgo/agentio"
+
+	"github.com/khanakia/ai-logger/internal/agents"
 	"github.com/khanakia/ai-logger/internal/store"
+	tf "github.com/khanakia/ai-logger/internal/testfixtures"
 )
 
-// All fixtures under testdata/ are made-up content in the real wire
-// shapes; none is copied from a real transcript.
+// Every fixture comes from internal/testfixtures: made-up content (alice,
+// bob) in the real wire shapes, written into a temp user home.
 
-func parseAll(t *testing.T, src Source, path string) []Record {
+type env struct {
+	home   string
+	reg    agents.Registry
+	st     *store.Store
+	dbPath string
+	out    bytes.Buffer
+}
+
+func newEnv(t *testing.T) *env {
 	t.Helper()
-	var out []Record
-	if err := src.Parse(context.Background(), path, func(r Record) error {
-		out = append(out, r)
-		return nil
-	}); err != nil {
-		t.Fatalf("parse %s: %v", path, err)
-	}
-	return out
-}
-
-func texts(recs []Record) []string {
-	out := make([]string, len(recs))
-	for i, r := range recs {
-		out[i] = string(r.Role) + ":" + r.Text
-	}
-	return out
-}
-
-func TestCodex_CurrentFormat(t *testing.T) {
-	recs := parseAll(t, codex{}, "testdata/codex/current.jsonl")
-	want := []string{
-		"user:How do I list files?",
-		"assistant:Use ls.\nAdd -la for details.",
-		"user:continue",
-		"assistant:Done.",
-		"user:continue", // a repeated prompt in the same encoding is a new turn
-	}
-	if got := texts(recs); strings.Join(got, "|") != strings.Join(want, "|") {
-		t.Fatalf("records:\n got %q\nwant %q", got, want)
-	}
-	first, answer := recs[0], recs[1]
-	if first.SessionID != "11111111-2222-4333-8444-555555555555" || first.CWD != "/work/demo" ||
-		first.ToolVersion != "0.169.0-alpha.11.1" || first.PermissionMode != "on-request" ||
-		first.Terminal != "Codex Desktop" || first.TerminalTitle != "vscode" {
-		t.Fatalf("user record metadata: %+v", first)
-	}
-	if answer.Model != "gpt-test-1" {
-		t.Fatalf("model = %q", answer.Model)
-	}
-	// The token_count after the final answer wins (not the one after
-	// the commentary message), with reasoning folded into output.
-	if answer.TokensIn != 200 || answer.TokensOut != 27 || answer.TokensCacheRead != 80 {
-		t.Fatalf("tokens = in %d out %d cache %d", answer.TokensIn, answer.TokensOut, answer.TokensCacheRead)
-	}
-	if answer.Extras["codex.reasoning_effort"] != "medium" || answer.Extras["codex.sandbox_type"] != "workspace-write" {
-		t.Fatalf("extras = %v", answer.Extras)
-	}
-	if !(codex{}).Anchor(answer) {
-		t.Fatal("current-format answer fails the drift anchor")
-	}
-	if versionCmp(first.ToolVersion, (codex{}).LastKnownVersion()) > 0 {
-		t.Fatalf("fixture version %s is newer than LastKnownVersion %s", first.ToolVersion, (codex{}).LastKnownVersion())
-	}
-}
-
-func TestCodex_LegacyFormat(t *testing.T) {
-	recs := parseAll(t, codex{}, "testdata/codex/legacy.jsonl")
-	want := []string{
-		"user:What is two plus two?",
-		"assistant:Four.",
-		"user:Thanks",
-		"assistant:You are welcome.",
-	}
-	if got := texts(recs); strings.Join(got, "|") != strings.Join(want, "|") {
-		t.Fatalf("records:\n got %q\nwant %q", got, want)
-	}
-	if recs[1].TokensIn != 50 || recs[1].TokensOut != 3 || recs[1].Model != "gpt-test-0" {
-		t.Fatalf("legacy answer: %+v", recs[1])
-	}
-	if recs[0].PermissionMode != "never" || recs[0].Extras["codex.network_access"] != false {
-		t.Fatalf("legacy turn context: %+v", recs[0])
-	}
-}
-
-func TestCodex_MixedEncodingsKeptOnce(t *testing.T) {
-	recs := parseAll(t, codex{}, "testdata/codex/mixed.jsonl")
-	want := []string{"user:Rename the file.", "assistant:Renamed."}
-	if got := texts(recs); strings.Join(got, "|") != strings.Join(want, "|") {
-		t.Fatalf("records:\n got %q\nwant %q", got, want)
-	}
-	if recs[1].TokensIn != 70 {
-		t.Fatalf("tokens lost on the deduplicated answer: %+v", recs[1])
-	}
-}
-
-func TestCodex_DiscoverSkipsIndex(t *testing.T) {
-	files, err := codex{}.Discover(context.Background(), "testdata/codex")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(files) != 3 {
-		t.Fatalf("files = %v", files)
-	}
-	for _, f := range files {
-		if filepath.Base(f) == "session_index.jsonl" {
-			t.Fatal("session_index.jsonl was discovered")
-		}
-	}
-}
-
-func TestCodex_EmitErrorStopsParse(t *testing.T) {
-	stop := errors.New("stop")
-	n := 0
-	err := codex{}.Parse(context.Background(), "testdata/codex/current.jsonl", func(Record) error {
-		n++
-		return stop
-	})
-	if !errors.Is(err, stop) || n != 1 {
-		t.Fatalf("err %v after %d records", err, n)
-	}
-}
-
-func TestClaudeCode_Parse(t *testing.T) {
-	recs := parseAll(t, claudeCode{}, "testdata/claude/session.jsonl")
-	want := []string{
-		"user:Explain goroutines briefly.",
-		"assistant:Lightweight threads.\nScheduled by the runtime.",
-		"user:And channels?",
-	}
-	if got := texts(recs); strings.Join(got, "|") != strings.Join(want, "|") {
-		t.Fatalf("records:\n got %q\nwant %q", got, want)
-	}
-	a := recs[1]
-	if a.Model != "claude-test" || a.StopReason != "end_turn" || a.TokensIn != 12 || a.TokensOut != 6 ||
-		a.TokensCacheRead != 3 || a.TokensCacheWrite != 2 || a.ToolVersion != "2.1.100" {
-		t.Fatalf("assistant: %+v", a)
-	}
-	if recs[0].LineHash == "" || recs[0].LineHash == recs[2].LineHash {
-		t.Fatal("line hashes missing or not unique")
-	}
-}
-
-// writeJSON writes v as JSON at path, creating parents.
-func writeJSON(t *testing.T, path string, v any) {
-	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	b, err := json.Marshal(v)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, b, 0o644); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestOpenCode_Parse(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "storage")
-	sess := filepath.Join(root, "session", "global", "ses_demo.json")
-	writeJSON(t, sess, map[string]any{"id": "ses_demo", "version": "1.1.0", "directory": "/work/oc", "title": "Demo"})
-	writeJSON(t, filepath.Join(root, "message", "ses_demo", "msg_b.json"), map[string]any{
-		"id": "msg_b", "role": "assistant", "modelID": "m-1", "providerID": "p-1",
-		"tokens": map[string]any{"input": 9, "output": 4, "reasoning": 2, "cache": map[string]int{"read": 1, "write": 0}},
-		"time":   map[string]int64{"created": 2000},
-	})
-	writeJSON(t, filepath.Join(root, "message", "ses_demo", "msg_a.json"), map[string]any{
-		"id": "msg_a", "role": "user", "time": map[string]int64{"created": 1000},
-	})
-	writeJSON(t, filepath.Join(root, "part", "msg_a", "prt_1.json"), map[string]string{"type": "text", "text": "Hello there"})
-	writeJSON(t, filepath.Join(root, "part", "msg_b", "prt_1.json"), map[string]string{"type": "reasoning", "text": "hidden"})
-	writeJSON(t, filepath.Join(root, "part", "msg_b", "prt_2.json"), map[string]string{"type": "text", "text": "Hi"})
-
-	files, err := opencode{}.Discover(context.Background(), root)
-	if err != nil || len(files) != 1 {
-		t.Fatalf("discover = %v, %v", files, err)
-	}
-	recs := parseAll(t, opencode{}, files[0])
-	if got := strings.Join(texts(recs), "|"); got != "user:Hello there|assistant:Hi" {
-		t.Fatalf("records = %q", got)
-	}
-	if recs[1].TokensOut != 6 || recs[1].Model != "m-1" || recs[0].SessionName != "Demo" {
-		t.Fatalf("assistant: %+v", recs[1])
-	}
-}
-
-func TestVersionCmp(t *testing.T) {
-	cases := []struct {
-		a, b string
-		want int
-	}{
-		{"0.169.0", "0.118.0", 1},
-		{"0.118.0-alpha.2", "0.118.0", -1},
-		{"0.118.0", "0.118.0", 0},
-		{"2.1.9", "2.1.114", -1},
-		{"1.0", "", 1},
-	}
-	for _, c := range cases {
-		if got := versionCmp(c.a, c.b); sign(got) != c.want {
-			t.Errorf("versionCmp(%q, %q) = %d, want %d", c.a, c.b, got, c.want)
-		}
-	}
-}
-
-func sign(n int) int {
-	switch {
-	case n > 0:
-		return 1
-	case n < 0:
-		return -1
-	}
-	return 0
-}
-
-func TestRegistry(t *testing.T) {
-	names := strings.Join(Names(), ",")
-	if names != "claude-code,codex,opencode" {
-		t.Fatalf("names = %s", names)
-	}
-	if _, ok := Lookup("codex"); !ok {
-		t.Fatal("codex not registered")
-	}
-	if len(All()) != 3 {
-		t.Fatal("All() size")
-	}
-	defer func() {
-		if recover() == nil {
-			t.Fatal("duplicate registration did not panic")
-		}
-	}()
-	Register(codex{})
-}
-
-// TestRun_CodexEndToEnd imports the codex fixtures into a real store,
-// then re-runs to prove the import is idempotent.
-func TestRun_CodexEndToEnd(t *testing.T) {
-	ctx := context.Background()
-	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "log.db"))
+	e := &env{home: tf.Isolate(t)}
+	e.dbPath = filepath.Join(t.TempDir(), "log.db")
+	st, err := store.Open(context.Background(), e.dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = st.Close() })
+	e.st = st
+	return e
+}
 
-	root := t.TempDir()
-	for _, name := range []string{"current.jsonl", "legacy.jsonl"} {
-		b, err := os.ReadFile(filepath.Join("testdata", "codex", name))
+func (e *env) agent(t *testing.T, tool string) agents.Agent {
+	t.Helper()
+	if len(e.reg.All()) == 0 {
+		reg, err := agents.FromOS()
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(root, name), b, 0o644); err != nil {
-			t.Fatal(err)
-		}
+		e.reg = reg
 	}
-	var out bytes.Buffer
-	stats, err := Run(ctx, st, codex{}, Options{Root: root, Out: &out})
+	a, ok := e.reg.ByTool(tool)
+	if !ok {
+		t.Fatalf("no agent %s", tool)
+	}
+	return a
+}
+
+func (e *env) run(t *testing.T, tool string, opts Options) Stats {
+	t.Helper()
+	opts.Out = &e.out
+	s, err := Run(context.Background(), e.st, e.agent(t, tool), opts)
+	if err != nil {
+		t.Fatalf("run %s: %v\n%s", tool, err, e.out.String())
+	}
+	return s
+}
+
+func (e *env) session(t *testing.T, id string) []*store.Entry {
+	t.Helper()
+	es, err := e.st.SessionEntries(context.Background(), id)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// current: 3 prompts, 2 answers; legacy: 2 prompts, 2 answers.
-	if stats.Inserted != 5 || stats.Attached != 4 || stats.Standalone != 0 || stats.FilesSuspect != 0 {
-		t.Fatalf("stats = %+v\n%s", stats, out.String())
-	}
-	entries, err := st.SessionEntries(ctx, "11111111-2222-4333-8444-555555555555")
+	return es
+}
+
+// count runs a COUNT(*) query on the log database.
+func (e *env) count(t *testing.T, query string, args ...any) int {
+	t.Helper()
+	db, err := sql.Open("sqlite", e.dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 3 || entries[0].Prompt != "How do I list files?" || !strings.HasPrefix(entries[0].Response, "Use ls.") {
-		t.Fatalf("entries = %+v", entries)
+	defer func() { _ = db.Close() }()
+	var n int
+	if err := db.QueryRow(query, args...).Scan(&n); err != nil {
+		t.Fatal(err)
 	}
-	if entries[0].Project != "demo" {
-		t.Fatalf("project fallback = %q", entries[0].Project)
+	return n
+}
+
+func (e *env) entries(t *testing.T) int { return e.count(t, `SELECT COUNT(*) FROM entries`) }
+
+// legacyHash is how every older ailog keyed a transcript line: SHA-256
+// of the line's bytes.
+func legacyHash(line string) string {
+	sum := sha256.Sum256([]byte(line))
+	return hex.EncodeToString(sum[:])
+}
+
+func TestRun_ClaudeEveryHomeAndIdempotent(t *testing.T) {
+	e := newEnv(t)
+	tf.ClaudeHome(t, e.home)
+	s := e.run(t, agents.ToolClaude, Options{})
+	if s.Homes != 2 || s.Files != 3 || s.Inserted != 4 || s.Attached != 3 || s.Standalone != 0 || s.FilesSuspect != 0 {
+		t.Fatalf("stats = %+v\n%s", s, e.out.String())
+	}
+	alice := e.session(t, tf.ClaudeSession)
+	if len(alice) != 3 {
+		t.Fatalf("alice entries = %d", len(alice))
+	}
+	first := alice[0]
+	if first.Prompt != "Explain goroutines briefly." || first.Response != "Lightweight threads.\nScheduled by the runtime." ||
+		first.Model != "claude-test" || first.StopReason != "end_turn" || first.TokenCountIn != 12 || first.TokenCountOut != 6 ||
+		first.TokenCountCacheRead != 3 || first.TokenCountCacheCreate != 2 || first.ToolVersion != "2.1.300" ||
+		first.Tool != agents.ToolClaude || first.Cwd != "/work/alice" || first.Project != "alice" || first.SessionName != "" {
+		t.Fatalf("first turn = %+v", first)
+	}
+	if first.CreatedAt.UTC() != time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC) {
+		t.Fatalf("created_at = %v (transcript time lost)", first.CreatedAt)
+	}
+	if alice[1].Prompt != "And channels?" || alice[1].Response != "" {
+		t.Fatalf("second prompt = %+v", alice[1])
+	}
+	if alice[2].Prompt != "Find the config file." || alice[2].Response != "It is config.yaml." {
+		t.Fatalf("subagent turn = %+v", alice[2])
+	}
+	if bob := e.session(t, tf.ClaudeBobSession); len(bob) != 1 || bob[0].Response != "Hi bob." {
+		t.Fatalf("bob = %+v", bob)
 	}
 
-	again, err := Run(ctx, st, codex{}, Options{Root: root, Out: &out, Force: true})
-	if err != nil {
-		t.Fatal(err)
+	again := e.run(t, agents.ToolClaude, Options{Force: true})
+	if again.Inserted != 0 || again.Attached != 0 || again.Standalone != 0 || again.RecordsSkipped != 7 {
+		t.Fatalf("forced re-run not idempotent: %+v", again)
 	}
-	if again.Inserted != 0 || again.Attached != 0 || again.RecordsSkipped != 9 {
-		t.Fatalf("second run not idempotent: %+v", again)
-	}
-	skipped, err := Run(ctx, st, codex{}, Options{Root: root, Out: &out})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if skipped.FilesSkipped != 2 {
+	skipped := e.run(t, agents.ToolClaude, Options{})
+	if skipped.FilesSkipped != 3 || skipped.Records != 0 {
 		t.Fatalf("watermark did not skip unchanged files: %+v", skipped)
 	}
 }
 
-func TestRun_SinceAndLimit(t *testing.T) {
+func TestRun_CodexCurrentAndLegacy(t *testing.T) {
+	e := newEnv(t)
+	tf.CodexHome(t, e.home, map[string]string{tf.CodexSession: tf.CodexCurrent(), tf.CodexLegacyID: tf.CodexLegacy()},
+		tf.CodexSession, tf.CodexLegacyID)
+	s := e.run(t, agents.ToolCodex, Options{})
+	if s.Inserted != 3 || s.Attached != 3 || s.Standalone != 0 || s.FilesSuspect != 0 {
+		t.Fatalf("stats = %+v\n%s", s, e.out.String())
+	}
+	cur := e.session(t, tf.CodexSession)
+	if len(cur) != 1 {
+		t.Fatalf("commentary stored as a turn: %+v", cur)
+	}
+	c := cur[0]
+	if c.Prompt != "How do I list files?" || c.Response != "Use ls." || c.Model != "gpt-test-1" ||
+		c.TokenCountIn != 200 || c.TokenCountOut != 27 || c.TokenCountCacheRead != 80 ||
+		c.PermissionMode != "on-request" || c.Terminal != "Codex Desktop" || c.TerminalTitle != "vscode" || c.ToolVersion != "0.160.0" {
+		t.Fatalf("codex turn = %+v", c)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal([]byte(c.Raw), &raw); err != nil {
+		t.Fatalf("raw = %q: %v", c.Raw, err)
+	}
+	if raw["codex.reasoning_effort"] != "medium" || raw["line_hash"] == "" {
+		t.Fatalf("raw = %v", raw)
+	}
+	leg := e.session(t, tf.CodexLegacyID)
+	if len(leg) != 2 || leg[0].Response != "Four." || leg[0].TokenCountIn != 50 || leg[1].Response != "You are welcome." {
+		t.Fatalf("legacy = %+v", leg)
+	}
+}
+
+func TestRun_GeminiRewrittenAnswerReplaces(t *testing.T) {
+	e := newEnv(t)
+	tf.GeminiHome(t, e.home)
+	s := e.run(t, agents.ToolGemini, Options{})
+	if s.Inserted != 1 || s.Attached != 1 || s.Updated != 1 {
+		t.Fatalf("stats = %+v", s)
+	}
+	es := e.session(t, tf.GeminiSession)
+	if len(es) != 1 || es[0].Response != "It explains setup." || es[0].TokenCountIn != 300 || es[0].TokenCountOut != 10 ||
+		es[0].TokenCountCacheRead != 100 || es[0].Cwd != "/work/alice" || es[0].Tool != agents.ToolGemini {
+		t.Fatalf("gemini = %+v", es)
+	}
+	if again := e.run(t, agents.ToolGemini, Options{Force: true}); again.Updated != 0 || again.Inserted != 0 {
+		t.Fatalf("re-run rewrote the answer again: %+v", again)
+	}
+}
+
+func TestRun_PiAndOpencode(t *testing.T) {
+	e := newEnv(t)
+	tf.PiHome(t, e.home)
+	tf.OpencodeHome(t, e.home)
+	if s := e.run(t, agents.ToolPi, Options{}); s.Inserted != 1 || s.Attached != 1 {
+		t.Fatalf("pi stats = %+v", s)
+	}
+	pi := e.session(t, tf.PiSession)
+	if len(pi) != 1 || pi[0].Response != "There are three." || pi[0].Cwd != "/work/bob" || pi[0].Model != "prov/pi-model" {
+		t.Fatalf("pi = %+v", pi)
+	}
+	if s := e.run(t, agents.ToolOpencode, Options{}); s.Inserted != 2 || s.Attached != 2 || s.Files != 2 {
+		t.Fatalf("opencode stats = %+v\n%s", s, e.out.String())
+	}
+	leg := e.session(t, tf.OpencodeLegacy)
+	if len(leg) != 1 || leg[0].Response != "Renamed it." || leg[0].Model != "oc-model" || leg[0].SessionName != "Alice legacy" ||
+		leg[0].TokenCountOut != 8 || leg[0].TokenCountCacheRead != 4 || leg[0].TokenCountCacheCreate != 1 {
+		t.Fatalf("opencode legacy = %+v", leg)
+	}
+	if !strings.Contains(leg[0].Raw, `"opencode.project_id":"global"`) {
+		t.Fatalf("raw = %s", leg[0].Raw)
+	}
+	db := e.session(t, tf.OpencodeDB)
+	if len(db) != 1 || db[0].Prompt != "Add a test." || db[0].Response != "Added one." || db[0].ToolVersion != "1.18.30" {
+		t.Fatalf("opencode db = %+v", db)
+	}
+}
+
+// TestMigration_OldDatabaseKeys is the dedup-continuity proof (plan T3):
+// a log.db written by an older ailog keys every imported line by the
+// SHA-256 of its bytes. Reading the same transcripts through agentio must
+// hit those keys (Turn.Raw is the same bytes), write nothing, and add the
+// message-id keys for the same entries.
+func TestMigration_OldDatabaseKeys(t *testing.T) {
+	e := newEnv(t)
+	main := tf.ClaudeHome(t, e.home)
 	ctx := context.Background()
-	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "log.db"))
+	lines := tf.ClaudeLines()
+	// What the old importer stored for alice's main transcript: prompt 1
+	// with its answer, prompt 2, each keyed by its line hash.
+	u1, err := e.st.InsertEntry(ctx, store.InsertEntryInput{Tool: agents.ToolClaude, SessionID: tf.ClaudeSession,
+		Prompt: "Explain goroutines briefly.", Raw: legacyHash(lines[0])})
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = st.Close() })
-	since := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	stats, err := Run(ctx, st, codex{}, Options{Root: "testdata/codex", Since: since, Force: true})
+	if err := e.st.AttachResponse(ctx, store.AttachResponseInput{EntryID: u1, Response: "Lightweight threads.\nScheduled by the runtime."}); err != nil {
+		t.Fatal(err)
+	}
+	u2, err := e.st.InsertEntry(ctx, store.InsertEntryInput{Tool: agents.ToolClaude, SessionID: tf.ClaudeSession,
+		Prompt: "And channels?", Raw: legacyHash(lines[4])})
 	if err != nil {
 		t.Fatal(err)
 	}
-	// legacy.jsonl (2025) is filtered out by --since.
-	if stats.Inserted != 4 { // current 3 + mixed 1
-		t.Fatalf("since: %+v", stats)
+	for line, id := range map[string]string{lines[0]: u1, lines[2]: u1, lines[4]: u2} {
+		if err := e.st.ImportLineRecord(ctx, legacyHash(line), main, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before := e.entries(t)
+
+	s := e.run(t, agents.ToolClaude, Options{Home: filepath.Join(e.home, ".claude")})
+	if s.RecordsMatched != 0 {
+		t.Fatalf("legacy keys missed, fell back to text match: %+v", s)
+	}
+	// Only the subagent run (never imported before) is new: 1 prompt + 1 answer.
+	if got := e.entries(t) - before; got != 1 || s.Inserted != 1 || s.Attached != 1 {
+		t.Fatalf("new rows = %d, stats = %+v", got, s)
+	}
+	for _, uuid := range []string{"u-1", "a-1", "u-2"} {
+		key := "msg:" + agents.ToolClaude + ":" + tf.ClaudeSession + ":" + uuid
+		if n := e.count(t, `SELECT COUNT(*) FROM import_lines WHERE line_hash = ?`, key); n != 1 {
+			t.Fatalf("message-id key %s not back-filled", key)
+		}
+	}
+	if n := e.count(t, `SELECT COUNT(*) FROM import_lines WHERE line_hash = ? AND entry_id = ?`,
+		"msg:"+agents.ToolClaude+":"+tf.ClaudeSession+":a-1", u1); n != 1 {
+		t.Fatal("answer's message-id key points at another entry")
+	}
+}
+
+// TestMigration_OldKeysCodexOpencodeCRLF extends the continuity proof to
+// the other formats older ailog imported: Codex event lines, opencode
+// message files (hashed whole) and a CRLF-terminated Claude line (the old
+// scanner dropped the "\r").
+func TestMigration_OldKeysCodexOpencodeCRLF(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	seed := func(prompt, session, tool string, keys ...string) {
+		t.Helper()
+		id, err := e.st.InsertEntry(ctx, store.InsertEntryInput{Tool: tool, SessionID: session, Prompt: prompt})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, k := range keys {
+			if err := e.st.ImportLineRecord(ctx, k, "old", id); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	cx := strings.Split(strings.TrimSpace(tf.CodexLegacy()), "\n")
+	tf.CodexHome(t, e.home, map[string]string{tf.CodexLegacyID: tf.CodexLegacy()}, tf.CodexLegacyID)
+	seed("What is two plus two?", tf.CodexLegacyID, agents.ToolCodex, legacyHash(cx[2]), legacyHash(cx[3]))
+	seed("Thanks", tf.CodexLegacyID, agents.ToolCodex, legacyHash(cx[5]), legacyHash(cx[6]))
+
+	tf.OpencodeHome(t, e.home)
+	st := filepath.Join(e.home, ".local/share/opencode/storage/message", tf.OpencodeLegacy)
+	var fileKeys []string
+	for _, name := range []string{"msg_0f0000000001aliceAAAAAA01.json", "msg_0f0000000002aliceAAAAAA02.json"} {
+		b, err := os.ReadFile(filepath.Join(st, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		fileKeys = append(fileKeys, legacyHash(string(b)))
+	}
+	seed("Rename the module.", tf.OpencodeLegacy, agents.ToolOpencode, fileKeys...)
+
+	cl := tf.ClaudeLines()
+	tf.Write(t, e.home, ".claude/settings.json", "{}")
+	tf.Write(t, e.home, ".claude/projects/-work-alice/"+tf.ClaudeSession+".jsonl", cl[0]+"\r\n")
+	seed("Explain goroutines briefly.", tf.ClaudeSession, agents.ToolClaude, legacyHash(cl[0]))
+
+	rows := e.entries(t)
+	for _, tool := range []string{agents.ToolCodex, agents.ToolOpencode, agents.ToolClaude} {
+		s := e.run(t, tool, Options{})
+		if s.RecordsMatched != 0 {
+			t.Fatalf("%s: legacy keys missed: %+v", tool, s)
+		}
+	}
+	// Only bob's database session is new for opencode.
+	if got := e.entries(t) - rows; got != 1 {
+		t.Fatalf("new rows = %d, want 1 (bob's opencode.db session)", got)
+	}
+}
+
+// TestMigration_RowsWithoutKeys covers rows stored under a key the
+// current reader does not produce (another encoding, a lost import_lines
+// table): the text match finds them, nothing is written twice.
+func TestMigration_RowsWithoutKeys(t *testing.T) {
+	e := newEnv(t)
+	tf.CodexHome(t, e.home, map[string]string{tf.CodexLegacyID: tf.CodexLegacy()}, tf.CodexLegacyID)
+	e.run(t, agents.ToolCodex, Options{})
+	rows := e.entries(t)
+	db, err := sql.Open("sqlite", e.dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`DELETE FROM import_lines`); err != nil {
+		t.Fatal(err)
+	}
+	_ = db.Close()
+
+	s := e.run(t, agents.ToolCodex, Options{Force: true})
+	if e.entries(t) != rows || s.Inserted != 0 || s.Attached != 0 || s.Standalone != 0 || s.RecordsMatched != 4 {
+		t.Fatalf("rows %d -> %d, stats %+v", rows, e.entries(t), s)
+	}
+	if n := e.count(t, `SELECT COUNT(*) FROM import_lines`); n != 4 {
+		t.Fatalf("keys not recorded again: %d", n)
+	}
+}
+
+func TestRun_IncrementalFromCursor(t *testing.T) {
+	e := newEnv(t)
+	main := tf.ClaudeHome(t, e.home)
+	e.run(t, agents.ToolClaude, Options{})
+	key := main
+	wm, ok, err := e.st.ImportFileWatermark(context.Background(), key)
+	if err != nil || !ok || wm.Offset == 0 {
+		t.Fatalf("cursor not stored: %+v %v %v", wm, ok, err)
 	}
 
-	st2, err := store.Open(ctx, filepath.Join(t.TempDir(), "log2.db"))
-	if err != nil {
+	answer := `{"type":"assistant","uuid":"a-2","sessionId":"` + tf.ClaudeSession + `","cwd":"/work/alice","timestamp":"2026-03-01T10:01:05.000Z","version":"2.1.300","message":{"role":"assistant","model":"claude-test","content":[{"type":"text","text":"Typed pipes."}],"usage":{"input_tokens":9,"output_tokens":2}}}`
+	// Half a line: not consumed.
+	tf.Append(t, main, answer[:40])
+	if s := e.run(t, agents.ToolClaude, Options{}); s.Records != 0 {
+		t.Fatalf("a partial line was read: %+v", s)
+	}
+	tf.Append(t, main, answer[40:]+"\n")
+	s := e.run(t, agents.ToolClaude, Options{})
+	// Read from the cursor: only the new answer, no re-read of old lines.
+	if s.Records != 1 || s.RecordsSkipped != 0 || s.Attached != 1 {
+		t.Fatalf("stats = %+v", s)
+	}
+	alice := e.session(t, tf.ClaudeSession)
+	if alice[1].Prompt != "And channels?" || alice[1].Response != "Typed pipes." {
+		t.Fatalf("answer read in a later run not attached to its prompt: %+v", alice[1])
+	}
+}
+
+func TestRun_ShrunkTranscriptReadFromStart(t *testing.T) {
+	e := newEnv(t)
+	main := tf.ClaudeHome(t, e.home)
+	e.run(t, agents.ToolClaude, Options{})
+	rows := e.entries(t)
+	lines := tf.ClaudeLines()
+	extra := `{"type":"user","uuid":"u-9","sessionId":"` + tf.ClaudeSession + `","cwd":"/work/alice","timestamp":"2026-03-01T11:00:00.000Z","version":"2.1.300","message":{"role":"user","content":"Rewritten tail."}}`
+	if err := os.WriteFile(main, []byte(lines[0]+"\n"+extra+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = st2.Close() })
-	limited, err := Run(ctx, st2, codex{}, Options{Root: "testdata/codex", Limit: 1, Force: true})
-	if err != nil {
-		t.Fatal(err)
+	s := e.run(t, agents.ToolClaude, Options{})
+	if e.entries(t) != rows+1 || s.Inserted != 1 || s.RecordsSkipped != 1 {
+		t.Fatalf("rows %d -> %d, stats %+v", rows, e.entries(t), s)
 	}
-	if limited.Inserted+limited.Standalone != 1 {
-		t.Fatalf("limit: %+v", limited)
+}
+
+// TestRun_CodexAnswerHeldForTokens: Codex writes the token count a few
+// lines after the answer. A run between the two must not store the answer
+// without usage; the next run stores it with usage, on its prompt.
+func TestRun_CodexAnswerHeldForTokens(t *testing.T) {
+	e := newEnv(t)
+	all := strings.Split(strings.TrimSpace(tf.CodexCurrent()), "\n")
+	head := strings.Join(all[:len(all)-1], "\n") + "\n" // everything but the last token_count
+	p := tf.CodexHome(t, e.home, map[string]string{tf.CodexSession: head}, tf.CodexSession)[0]
+	if s := e.run(t, agents.ToolCodex, Options{}); s.Inserted != 1 || s.Attached != 0 || s.Standalone != 0 {
+		t.Fatalf("first run = %+v", s)
+	}
+	tf.Append(t, p, all[len(all)-1]+"\n")
+	if s := e.run(t, agents.ToolCodex, Options{}); s.Attached != 1 || s.Inserted != 0 {
+		t.Fatalf("second run = %+v", s)
+	}
+	es := e.session(t, tf.CodexSession)
+	if len(es) != 1 || es[0].Response != "Use ls." || es[0].TokenCountIn != 200 {
+		t.Fatalf("entries = %+v", es)
+	}
+}
+
+func TestRun_LimitKeepsWatermark(t *testing.T) {
+	e := newEnv(t)
+	tf.ClaudeHome(t, e.home)
+	if s := e.run(t, agents.ToolClaude, Options{Limit: 1}); s.Inserted+s.Standalone != 1 {
+		t.Fatalf("limit = %+v", s)
+	}
+	s := e.run(t, agents.ToolClaude, Options{})
+	if s.FilesSkipped != 0 || e.entries(t) != 4 {
+		t.Fatalf("after limit: %+v, %d rows", s, e.entries(t))
+	}
+}
+
+func TestRun_SinceFilter(t *testing.T) {
+	e := newEnv(t)
+	tf.ClaudeHome(t, e.home)
+	s := e.run(t, agents.ToolClaude, Options{Since: time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC)})
+	if s.Inserted != 1 || e.entries(t) != 1 { // only bob's turn is on or after 2 March
+		t.Fatalf("since = %+v", s)
+	}
+}
+
+func TestRun_FromHomeAndLegacyRoot(t *testing.T) {
+	for _, from := range []string{".claude-bob", ".claude-bob/projects"} {
+		t.Run(from, func(t *testing.T) {
+			e := newEnv(t)
+			tf.ClaudeHome(t, e.home)
+			s := e.run(t, agents.ToolClaude, Options{Home: filepath.Join(e.home, from)})
+			if s.Homes != 1 || s.Files != 1 || s.Inserted != 1 {
+				t.Fatalf("stats = %+v", s)
+			}
+		})
+	}
+	e := newEnv(t)
+	tf.ClaudeHome(t, e.home)
+	if s := e.run(t, agents.ToolClaude, Options{Home: "~/.claude-bob"}); s.Inserted != 1 {
+		t.Fatalf("~ not expanded: %+v", s)
+	}
+}
+
+func TestRun_DriftWatchdog(t *testing.T) {
+	newer := `{"type":"user","uuid":"d-u","sessionId":"dddd","cwd":"/work/alice","timestamp":"2026-04-01T10:00:00.000Z","version":"9.9.9","message":{"role":"user","content":"hi"}}
+{"type":"assistant","uuid":"d-a","sessionId":"dddd","cwd":"/work/alice","timestamp":"2026-04-01T10:00:01.000Z","version":"9.9.9","message":{"role":"assistant","content":[{"type":"text","text":"hello"}]}}
+`
+	for _, strict := range []bool{true, false} {
+		e := newEnv(t)
+		tf.Write(t, e.home, ".claude/settings.json", "{}")
+		p := tf.Write(t, e.home, ".claude/projects/-work-alice/dddd.jsonl", newer)
+		s := e.run(t, agents.ToolClaude, Options{Strict: strict})
+		_, stamped, _ := e.st.ImportFileWatermark(context.Background(), p)
+		wantTag := "WARN(newer-version)"
+		if strict {
+			wantTag = "REJECT"
+		}
+		if s.FilesSuspect != 1 || !strings.Contains(e.out.String(), wantTag) || stamped == strict {
+			t.Fatalf("strict=%v: stats %+v stamped %v\n%s", strict, s, stamped, e.out.String())
+		}
+	}
+}
+
+func TestRecordOf(t *testing.T) {
+	a := agents.Agent{Tool: "tool-x", UseTitle: true}
+	tr := agents.Transcript{Key: "/k", ConversationID: "conv", Dir: "/d", Title: "T"}
+	turn := agentio.Turn{ID: "m1", Role: agentio.RoleAssistant, Text: "x", Model: "p/m", Raw: agentio.Raw("raw"),
+		Tokens: &agentio.TokenCounts{Input: 1, CachedInput: 2, CacheWrite: 3, Output: 4, Reasoning: 5}}
+	r, ok := recordOf(a, tr, turn, agents.Annotation{Model: "m"})
+	if !ok || r.SessionID != "conv" || r.CWD != "/d" || r.SessionName != "T" || r.Model != "m" || r.TokensIn != 1 ||
+		r.TokensCacheRead != 2 || r.TokensCacheWrite != 3 || r.TokensOut != 9 || r.MsgKey != "msg:tool-x:conv:m1" ||
+		r.LineHash != legacyHash("raw") || r.Source != "/k" {
+		t.Fatalf("record = %+v", r)
+	}
+	for name, tu := range map[string]agentio.Turn{
+		"interim": {Role: agentio.RoleAssistant, Text: "x", Interim: true},
+		"empty":   {Role: agentio.RoleAssistant},
+	} {
+		if _, ok := recordOf(a, tr, tu, agents.Annotation{}); ok {
+			t.Errorf("%s turn was kept", name)
+		}
+	}
+	user, _ := recordOf(agents.Agent{Tool: "t"}, tr, agentio.Turn{Role: agentio.RoleUser, Text: "q", Model: "m"}, agents.Annotation{})
+	if user.Model != "" || user.SessionName != "" || user.MsgKey != "" || user.LineHash != "" {
+		t.Fatalf("user record = %+v", user)
+	}
+}
+
+func TestNewerThan(t *testing.T) {
+	cases := []struct {
+		v, tested string
+		want      bool
+	}{
+		{"0.169.0", "0.162.1", true},
+		{"0.118.0-alpha.2", "0.118.0", false},
+		{"2.1.9", "2.1.114", false},
+		{"x", "1.0", false},
+		{"1.0", "", false},
+	}
+	for _, c := range cases {
+		if got := newerThan(c.v, c.tested); got != c.want {
+			t.Errorf("newerThan(%q, %q) = %v", c.v, c.tested, got)
+		}
 	}
 }
 
