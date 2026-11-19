@@ -21,7 +21,7 @@ import (
 //   - event_msg.user_message    → the user's prompt text.
 //   - event_msg.agent_message   → the assistant's final-answer text.
 //   - event_msg.token_count     → per-turn usage (input / cached / output);
-//                                 attached to the most recent agent_message.
+//     attached to the most recent agent_message.
 //
 // Everything else (response_item, agent_reasoning, exec_command_*) is
 // internal-pipeline state we don't need for backfill — they'd inflate
@@ -76,7 +76,7 @@ type codexEnvelope struct {
 //   - originator: "Codex Desktop" vs "Codex CLI" — the host application
 //   - source:     "vscode" / "terminal" / etc. — embedding context
 //   - model_provider: "openai" / "anthropic" / "google" — Codex routes to
-//                     multiple providers, useful for grouping cost
+//     multiple providers, useful for grouping cost
 type codexSessionMeta struct {
 	ID            string `json:"id"`
 	Cwd           string `json:"cwd"`
@@ -202,15 +202,15 @@ func (codex) Parse(_ context.Context, path string, emit func(Record) error) erro
 		source        string // session_meta.source       (vscode / terminal)
 		modelProvider string // session_meta.model_provider
 
-		currentModel      string
-		approvalPolicy    string // turn_context.approval_policy
-		personality       string
-		timezone          string
-		sandboxType       string
-		networkAccess     bool
-		networkAccessSet  bool // disambiguate "false because absent" from "false because set"
-		collabMode        string
-		reasoningEffort   string
+		currentModel     string
+		approvalPolicy   string // turn_context.approval_policy
+		personality      string
+		timezone         string
+		sandboxType      string
+		networkAccess    bool
+		networkAccessSet bool // disambiguate "false because absent" from "false because set"
+		collabMode       string
+		reasoningEffort  string
 	)
 
 	// Buffered assistant record. Codex emits agent_message THEN a
