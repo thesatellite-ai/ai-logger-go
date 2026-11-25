@@ -39,3 +39,7 @@ User-facing changes go under `[Unreleased]` in [CHANGELOG.md](CHANGELOG.md), fol
 ## Questions
 
 Open a [discussion or issue](https://github.com/thesatellite-ai/ai-logger-go/issues). We're happy to help you land your first contribution.
+
+## Names guard
+
+Before contributing, enable the repo's git hooks once per clone: `git config core.hooksPath .githooks`. They run `scripts/check-names.sh`, which blocks private names (clients, people, internal hosts) from commits, commit messages and pushes. It reads a word list kept outside the repo (`$NAMES_GUARD_FILE` or `~/.config/names-guard/terms.txt`) and skips with a warning when there is none. Run it over the whole tree with `scripts/check-names.sh --all`. Words that are legitimate in this repo go in `.github/names-allow.txt`.

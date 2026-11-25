@@ -1,0 +1,3 @@
+# Generic words that the names guard must not flag in this repo.
+# StopReason: the stop_reason field of the Anthropic Messages API.
+stopreason

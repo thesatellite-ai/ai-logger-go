@@ -105,3 +105,8 @@ tasks:
     desc: Remove build artefacts
     cmds:
       - rm -rf bin
+
+  names:
+    desc: Check tracked files for private names (needs the local word list; skips without it)
+    cmds:
+      - ./scripts/check-names.sh --all

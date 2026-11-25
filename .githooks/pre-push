@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Checks the messages, authors and added lines of every commit being pushed.
+set -euo pipefail
+check="$(git rev-parse --show-toplevel)/scripts/check-names.sh"
+zero=0000000000000000000000000000000000000000
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue                      # branch delete
+  if [ "$remote_sha" = "$zero" ]; then                         # new branch: compare with the default branch
+    base="$(git merge-base "$local_sha" origin/HEAD 2>/dev/null || true)"
+    if [ -z "$base" ]; then "$check" --all; continue; fi
+    remote_sha="$base"
+  fi
+  [ "$remote_sha" = "$local_sha" ] && continue
+  "$check" --range "$remote_sha..$local_sha"
+done
